@@ -1,0 +1,241 @@
+---
+title: "tula — Interaction Terms Exploration"
+format:
+  html:
+    embed-resources: true
+    code-fold: false
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup}
+devtools::load_all(".")
+set.seed(42)
+```
+
+This file explores how `tula()` currently handles models with interaction
+(multiplicative) terms, across a variety of scenarios. The goal is to document
+current behavior and identify what changes (if any) might be desirable.
+
+---
+
+## 1 — Numeric × Numeric interaction
+
+The simplest case: two continuous predictors crossed with `*`.
+R creates three terms: the two main effects plus their product (`cyl:wt`).
+
+```{r num-x-num}
+m1 <- lm(mpg ~ cyl * wt, data = mtcars)
+summary(m1)$coefficients
+cat("\n")
+tula(m1)
+cat("\nWide:\n")
+tula(m1, wide = TRUE)
+```
+
+---
+
+## 2 — Numeric × Numeric: explicit colon syntax
+
+Same model as Section 1 written with explicit `+` and `:` instead of `*`.
+Verifies that both formula styles produce identical output.
+
+```{r num-x-num-colon}
+m2 <- lm(mpg ~ cyl + wt + cyl:wt, data = mtcars)
+tula(m2)
+```
+
+---
+
+## 3 — Factor × Numeric interaction
+
+One factor and one continuous predictor crossed with `*`.
+R creates main effects for both plus separate slopes (`factor:numeric`) for
+each non-reference factor level.
+
+```{r factor-x-num}
+m3 <- lm(mpg ~ factor(cyl) * wt, data = mtcars)
+summary(m3)$coefficients
+cat("\n")
+tula(m3)
+cat("\nWith ref = TRUE:\n")
+tula(m3, ref = TRUE)
+cat("\nWide:\n")
+tula(m3, wide = TRUE)
+```
+
+---
+
+## 4 — Factor × Numeric: named factor variable (not inline)
+
+Same as Section 3 but the factor is stored as a named column, which can
+affect how labels appear.
+
+```{r factor-x-num-named}
+df4 <- mtcars
+df4$cyl_f <- factor(mtcars$cyl)
+
+m4 <- lm(mpg ~ cyl_f * wt, data = df4)
+summary(m4)$coefficients
+cat("\n")
+tula(m4)
+cat("\nWith ref = TRUE:\n")
+tula(m4, ref = TRUE)
+```
+
+---
+
+## 5 — Factor × Factor interaction
+
+Two factor variables crossed with `*`.
+Produces main-effect groups for each factor plus interaction dummy rows.
+
+```{r factor-x-factor}
+m5 <- lm(mpg ~ factor(cyl) * factor(am), data = mtcars)
+summary(m5)$coefficients
+cat("\n")
+tula(m5)
+cat("\nWith ref = TRUE:\n")
+tula(m5, ref = TRUE)
+cat("\nWide:\n")
+tula(m5, wide = TRUE)
+```
+
+---
+
+## 6 — Factor × Factor: named factor variables
+
+Same as Section 5 but using pre-created named factor columns.
+
+```{r factor-x-factor-named}
+df6 <- mtcars
+df6$cyl_f <- factor(mtcars$cyl)
+df6$am_f  <- factor(mtcars$am, labels = c("automatic", "manual"))
+
+m6 <- lm(mpg ~ cyl_f * am_f, data = df6)
+summary(m6)$coefficients
+cat("\n")
+tula(m6)
+cat("\nWith ref = TRUE:\n")
+tula(m6, ref = TRUE)
+```
+
+---
+
+## 7 — Interaction only (no main effect for one term)
+
+Using `:` directly to include an interaction term without its component
+main effect (uncommon but valid). Shows how tula handles a model where
+the term labels don't include one of the constituent variables.
+
+```{r interaction-only}
+# wt main effect only; cyl appears only in the interaction
+m7 <- lm(mpg ~ wt + cyl:wt, data = mtcars)
+summary(m7)$coefficients
+cat("\n")
+tula(m7)
+```
+
+---
+
+## 8 — Three-way numeric interaction
+
+A three-way `*` expansion among continuous predictors, producing all two-way
+and the three-way interaction terms.
+
+```{r three-way-num}
+m8 <- lm(mpg ~ cyl * wt * hp, data = mtcars)
+summary(m8)$coefficients
+cat("\n")
+tula(m8)
+cat("\nWide:\n")
+tula(m8, wide = TRUE)
+```
+
+---
+
+## 9 — Factor × Numeric with additional covariates
+
+A realistic model: a factor × numeric interaction alongside other predictors.
+
+```{r factor-x-num-covariates}
+df9 <- mtcars
+df9$transmission <- factor(mtcars$am, labels = c("automatic", "manual"))
+
+m9 <- lm(mpg ~ transmission * wt + hp + qsec, data = df9)
+summary(m9)$coefficients
+cat("\n")
+tula(m9)
+cat("\nWith ref = TRUE:\n")
+tula(m9, ref = TRUE)
+cat("\nWide:\n")
+tula(m9, wide = TRUE)
+```
+
+---
+
+## 10 — Long interaction term names
+
+Interaction terms formed from long variable names, to see how truncation
+applies to terms like `long_name_a:long_name_b`.
+
+```{r long-interaction-names}
+df10 <- mtcars
+df10$fuel_efficiency_rating   <- mtcars$mpg + rnorm(32, 0, 1)
+df10$engine_displacement_liters <- mtcars$disp / 61.024
+df10$vehicle_curb_weight_lbs    <- mtcars$wt * 1000
+df10$transmission_type          <- factor(mtcars$am, labels = c("automatic", "manual"))
+
+m10 <- lm(mpg ~ fuel_efficiency_rating * engine_displacement_liters +
+                vehicle_curb_weight_lbs + transmission_type,
+           data = df10)
+summary(m10)$coefficients
+cat("\n")
+tula(m10)
+cat("\nWide:\n")
+tula(m10, wide = TRUE)
+cat("\nwidth = Inf:\n")
+tula(m10, width = Inf)
+```
+
+---
+
+## 11 — GLM with interaction
+
+A logistic regression with a factor × numeric interaction, to confirm behavior
+carries over to GLM models.
+
+```{r glm-interaction}
+m11 <- glm(am ~ factor(cyl) * wt, data = mtcars, family = binomial)
+summary(m11)$coefficients
+cat("\n")
+tula(m11)
+cat("\nWith ref = TRUE:\n")
+tula(m11, ref = TRUE)
+cat("\nWide:\n")
+tula(m11, wide = TRUE)
+```
+
+---
+
+## 12 — Polynomial terms (not an interaction, but related)
+
+`I(x^2)` and `poly()` create derived numeric terms that are not interactions
+but have non-standard names. Included for comparison.
+
+```{r polynomial}
+m12a <- lm(mpg ~ wt + I(wt^2), data = mtcars)
+tula(m12a)
+
+cat("\n")
+m12b <- lm(mpg ~ poly(wt, 2), data = mtcars)
+tula(m12b)
+
+cat("\n")
+m12c <- lm(mpg ~ poly(wt, 2, raw = TRUE), data = mtcars)
+tula(m12c)
+```

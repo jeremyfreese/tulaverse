@@ -1,0 +1,360 @@
+---
+title: "tula — Visual Test Script"
+format:
+  html:
+    embed-resources: true
+    code-fold: false
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup}
+# Load the tula package from source.
+# Run this script from the Koala/ package directory, or set the path below.
+devtools::load_all(".")
+```
+
+---
+
+## Test 1 — Simple lm, all numeric predictors
+
+**Expected:** Two-column header with AIC/BIC on left, N/R²/Adj R² on right.
+Coefficient table with `cyl`, `wt`, `hp`. Intercept at bottom after separator.
+No CI columns in narrow mode; CI columns appear in wide mode.
+
+```{r test1-narrow}
+m1 <- lm(mpg ~ cyl + wt + hp, data = mtcars)
+cat("Narrow (default):\n")
+tula(m1)
+```
+
+```{r test1-wide}
+cat("Wide (with 95% CI):\n")
+tula(m1, wide = TRUE)
+```
+
+---
+
+## Test 2 — lm with a pre-created factor variable
+
+**Expected:** `cyl_f` appears as a group header row; levels `6` and `8` are
+indented below it. Reference level (`4`) does not appear.
+
+```{r test2}
+mtcars$cyl_f <- factor(mtcars$cyl)
+m2 <- lm(mpg ~ cyl_f + wt, data = mtcars)
+cat("Narrow:\n")
+tula(m2)
+cat("\nWide:\n")
+tula(m2, wide = TRUE)
+```
+
+---
+
+## Test 3 — lm with `factor()` inline in formula
+
+**Expected:** Same grouping behavior as Test 2. The group header labels read
+`cyl` and `am` (the `factor()` wrapper is stripped for display).
+
+```{r test3}
+m3 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+cat("Narrow:\n")
+tula(m3)
+cat("\nWide:\n")
+tula(m3, wide = TRUE)
+```
+
+---
+
+## Test 4 — lm with a three-level factor (iris Species)
+
+**Expected:** `Species` header row; levels `versicolor` and `virginica`
+indented below it. `setosa` (the reference) does not appear.
+
+```{r test4}
+m4 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
+cat("Narrow:\n")
+tula(m4)
+cat("\nWide:\n")
+tula(m4, wide = TRUE)
+```
+
+---
+
+## Test 5 — lm with an interaction term
+
+**Expected:** The interaction `cyl:factor(am)1` is NOT grouped under a factor
+header — it prints as a plain row. The `factor(am)` levels are grouped normally.
+
+```{r test5}
+m5 <- lm(mpg ~ cyl * factor(am) + wt, data = mtcars)
+cat("Narrow:\n")
+tula(m5)
+```
+
+---
+
+## Test 6 — glm binomial (logistic regression)
+
+**Expected:** Family/link line at top. Header left: AIC, BIC, Log likelihood.
+Header right: N, McFadden R-sq, Nagelkerke R-sq. Coefficient table uses `z`
+and `P>|z|`.
+
+```{r test6}
+m6 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+cat("Narrow:\n")
+tula(m6)
+cat("\nWide:\n")
+tula(m6, wide = TRUE)
+```
+
+---
+
+## Test 7 — glm binomial with factor predictor
+
+**Expected:** Factor grouping in glm output: `factor(cyl)` header row with
+indented non-reference levels.
+
+```{r test7}
+m7 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+cat("Narrow:\n")
+tula(m7)
+cat("\nWide:\n")
+tula(m7, wide = TRUE)
+```
+
+---
+
+## Test 8 — glm Poisson
+
+**Expected:** `Family: poisson / Link: log` at top. Stat column header is `z`.
+
+```{r test8}
+# Center cyl to avoid perfect separation
+mtcars$cyl_c <- mtcars$cyl - mean(mtcars$cyl)
+m8 <- glm(carb ~ cyl_c + wt, data = mtcars, family = poisson)
+cat("Narrow:\n")
+tula(m8)
+cat("\nWide:\n")
+tula(m8, wide = TRUE)
+```
+
+---
+
+## Test 9 — glm Gaussian (should show `t`, not `z`)
+
+**Expected:** `Family: gaussian / Link: identity`. Stat column should be `t`
+and p-value header should be `P>|t|`.
+
+```{r test9}
+m9 <- glm(mpg ~ cyl + wt, data = mtcars, family = gaussian)
+tula(m9)
+```
+
+---
+
+## Test 10 — Very small p-values (edge case)
+
+**Expected:** p-values below 0.0001 display as `< .0001`.
+
+```{r test10}
+m10 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+tula(m10)
+```
+
+---
+
+## Test 11 — Single predictor (minimal model)
+
+**Expected:** Header and table format correctly with just one covariate row
+plus the intercept.
+
+```{r test11}
+m11 <- lm(mpg ~ wt, data = mtcars)
+cat("Narrow:\n")
+tula(m11)
+cat("\nWide:\n")
+tula(m11, wide = TRUE)
+```
+
+---
+
+## Test 12 — Ordered factor
+
+**Expected:** Ordered factors are treated the same as regular factors — grouped
+under a header row with indented levels.
+
+```{r test12}
+mtcars$gear_o <- factor(mtcars$gear, ordered = TRUE)
+m12 <- lm(mpg ~ gear_o + wt, data = mtcars)
+tula(m12)
+```
+
+---
+
+## Test 13 — glm with factor and small sample (stress test)
+
+```{r test13}
+# Use only a subset of iris for a binomial model
+iris_bin <- iris
+iris_bin$is_virginica <- as.integer(iris_bin$Species == "virginica")
+m13 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
+           data = iris_bin, family = binomial)
+cat("Narrow:\n")
+tula(m13)
+cat("\nWide:\n")
+tula(m13, wide = TRUE)
+```
+
+---
+
+## Test 14 — Error handling: unsupported object type
+
+**Expected:** A clear, informative error message naming the unsupported class.
+
+```{r test14}
+tryCatch(
+  tula(list(x = 1, y = 2)),
+  error = function(e) cat("Error caught as expected:\n", conditionMessage(e), "\n")
+)
+```
+
+---
+
+## Test 15 — glm with probit link
+
+**Expected:** `Family: binomial / Link: probit`. Otherwise same structure as
+logistic output.
+
+```{r test15}
+m15 <- glm(am ~ cyl + wt, data = mtcars, family = binomial(link = "probit"))
+tula(m15)
+```
+
+---
+
+## Test 16 — `ref = TRUE`: single factor, lm
+
+**Expected:** `ref = FALSE` (default) shows only non-reference levels (`6`, `8`).
+`ref = TRUE` appends a `4 (base)` row at the bottom of the `cyl` group with
+`0` in the Coef. column and blanks for SE, t, and P>|t|.
+
+```{r test16}
+m16 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+cat("ref = FALSE (default):\n")
+tula(m16)
+cat("\nref = TRUE:\n")
+tula(m16, ref = TRUE)
+cat("\nref = TRUE, wide = TRUE:\n")
+tula(m16, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 17 — `ref = TRUE`: two factors, lm
+
+**Expected:** Each factor group gets its own `(base)` row appended after its
+non-reference levels. `cyl` base = `4`; `am` base = `0`.
+
+```{r test17}
+m17 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+cat("ref = TRUE, narrow:\n")
+tula(m17, ref = TRUE)
+cat("\nref = TRUE, wide:\n")
+tula(m17, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 18 — `ref = TRUE`: glm with factor predictor
+
+**Expected:** Reference row appears in the glm coefficient table just as in lm.
+Stat column is `z`; p-value column is `P>|z|`. CI columns blank on ref row
+when `wide = TRUE`.
+
+```{r test18}
+m18 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+cat("ref = TRUE, narrow:\n")
+tula(m18, ref = TRUE)
+cat("\nref = TRUE, wide:\n")
+tula(m18, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 19 — `ref = TRUE`: three-level factor (iris)
+
+**Expected:** `setosa` appears as the base row after `versicolor` and
+`virginica`. All other columns blank on that row.
+
+```{r test19}
+m19 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
+cat("ref = FALSE (default):\n")
+tula(m19)
+cat("\nref = TRUE:\n")
+tula(m19, ref = TRUE)
+```
+
+---
+
+## Test 20 — `label = TRUE` with factor levels that already are label strings
+
+**Expected:** When a factor variable's levels are already meaningful strings
+(e.g. `"Four"`, `"Six"`, `"Eight"`), `label = TRUE` and `label = FALSE` produce
+identical output — the level names are used as-is.
+
+```{r test20}
+df20 <- mtcars
+df20$cyl_named <- factor(mtcars$cyl,
+                          levels = c(4, 6, 8),
+                          labels = c("Four", "Six", "Eight"))
+m20 <- lm(mpg ~ cyl_named + wt, data = df20)
+cat("label = TRUE (default):\n")
+tula(m20, ref = TRUE, label = TRUE)
+cat("\nlabel = FALSE:\n")
+tula(m20, ref = TRUE, label = FALSE)
+```
+
+---
+
+## Test 21 — `label = TRUE` with haven-style value labels
+
+**Expected:** When the data column carries a `labels` attribute (as produced
+by `haven` when reading SPSS/Stata files), `label = TRUE` substitutes the
+numeric codes with their text labels in the output. `label = FALSE` shows
+the raw numeric suffixes instead. `tula()` recovers the labels from the
+original data even when `factor()` is used inline in the formula (which would
+normally strip the attribute).
+
+```{r test21}
+df21 <- mtcars
+# Simulate a haven_labelled column: a plain numeric with a 'labels' attr.
+# In real usage this comes from haven::read_spss() / haven::read_dta().
+df21$cyl_lbl <- mtcars$cyl
+attr(df21$cyl_lbl, "labels") <- c("Four cylinders" = 4,
+                                   "Six cylinders"  = 6,
+                                   "Eight cylinders" = 8)
+
+# Wrap in factor() in the formula to get factor grouping in the output.
+m21 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df21)
+cat("label = TRUE (default) — shows full label text:\n")
+tula(m21, ref = TRUE, label = TRUE)
+cat("\nlabel = FALSE — shows raw numeric suffixes '4', '6', '8':\n")
+tula(m21, ref = TRUE, label = FALSE)
+```
+
+---
+
+## Test 22 — `ref = TRUE` alignment check (wide mode, long label)
+
+**Expected:** All rows — including the `(base)` row and factor header rows —
+are exactly the same width as the separator lines in wide mode.
+
+```{r test22}
+m22 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+tula(m22, ref = TRUE, wide = TRUE)
+```

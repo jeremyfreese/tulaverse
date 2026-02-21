@@ -1,0 +1,17 @@
+Package: tula
+Type: Package
+Title: Stata-Style Regression Output for R Models
+Version: 0.1.0
+Authors@R: person("Author", "Name", email = "email@example.com",
+                  role = c("aut", "cre"))
+Description: Provides tula(), which prints regression output formatted to
+    resemble Stata's regression output. Includes a two-block header with
+    model fit statistics, a coefficient table with factor variable grouping,
+    and an optional confidence interval column. Supports lm() and glm()
+    with an extensible S3 dispatch architecture for future model types.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports: stats
+Suggests: knitr, rmarkdown, quarto
