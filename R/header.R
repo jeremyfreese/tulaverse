@@ -6,14 +6,23 @@
 #' returns the width of the widest result. This gives the tightest right-
 #' aligned value column that fits all values in the block without wasted space.
 #'
-#' @param vals Numeric vector of values to display.
+#' @param vals Numeric vector of values to display (named).
+#' @param fmts Named character vector of format overrides (e.g.
+#'   `c("Log likelihood" = "f3")`). Names match `names(vals)`. Missing entries
+#'   use the default `"g4"` format.
 #' @return Integer. Minimum value-field width for this block.
-.header_val_width <- function(vals) {
+.header_val_width <- function(vals, fmts = character(0L)) {
   if (length(vals) == 0L) return(0L)
   # fmt_header_val with width=1 returns the value at its natural width
   # (no space flag, so no extra leading space for positives).
-  formatted <- vapply(vals, function(x) fmt_header_val(x, width = 1L),
-                      character(1L))
+  formatted <- mapply(
+    function(x, nm) {
+      fmt <- if (!is.null(nm) && nm %in% names(fmts)) fmts[[nm]] else "g4"
+      fmt_header_val(x, width = 1L, fmt = fmt)
+    },
+    vals, names(vals),
+    USE.NAMES = FALSE
+  )
   max(nchar(formatted))
 }
 
@@ -37,18 +46,23 @@
 #'   line. Must equal the coefficient table width.
 #' @param col_gap_min  Integer. Minimum spaces between the two header columns
 #'   (default 3). The actual gap may be wider if total_width requires it.
+#' @param value_fmts   Named character vector of format overrides keyed by
+#'   header label name (e.g. `c("Log likelihood" = "f3")`). Missing entries
+#'   use the default `"g4"` format (4 significant digits). `"f3"` uses fixed
+#'   notation with up to 3 decimal places.
 #'
 #' @return Character vector, one element per line, each exactly total_width
 #'   characters wide.
 format_header <- function(header_left, header_right,
-                          total_width, col_gap_min = 3L) {
+                          total_width, col_gap_min = 3L,
+                          value_fmts = character(0L)) {
   # Tight label widths: just wide enough for the longest label name
   left_lbl_w  <- if (length(header_left)  > 0L) max(nchar(names(header_left)))  else 0L
   right_lbl_w <- if (length(header_right) > 0L) max(nchar(names(header_right))) else 0L
 
   # Tight value widths: just wide enough for the widest formatted value
-  left_val_w  <- .header_val_width(unname(header_left))
-  right_val_w <- .header_val_width(unname(header_right))
+  left_val_w  <- .header_val_width(header_left,  fmts = value_fmts)
+  right_val_w <- .header_val_width(header_right, fmts = value_fmts)
 
   # Block widths: label + " = " (3) + value
   left_block_w  <- left_lbl_w  + 3L + left_val_w
@@ -60,7 +74,8 @@ format_header <- function(header_left, header_right,
 
   # Format one "label = value" pair with its block's specific widths
   fmt_pair <- function(nm, val, lbl_w, val_w) {
-    sprintf("%s = %s", pad_right(nm, lbl_w), fmt_header_val(val, width = val_w))
+    fmt <- if (nm %in% names(value_fmts)) value_fmts[[nm]] else "g4"
+    sprintf("%s = %s", pad_right(nm, lbl_w), fmt_header_val(val, width = val_w, fmt = fmt))
   }
 
   left_lines <- if (length(header_left) > 0L) {
@@ -107,17 +122,20 @@ format_header <- function(header_left, header_right,
 #' @param coef_labels  Character vector of all coefficient display labels.
 #' @param wide         Logical. TRUE if CI columns will be shown.
 #' @param col_gap_min  Integer. Minimum gap between header columns (default 3).
+#' @param value_fmts   Named character vector of format overrides (see
+#'   `format_header()`). Must match what is passed to `format_header()`.
 #'
 #' @return Integer. The shared total width for the output.
 compute_total_width <- function(header_left, header_right, coef_labels,
-                                wide, col_gap_min = 3L) {
+                                wide, col_gap_min = 3L,
+                                value_fmts = character(0L)) {
   # Tight label widths
   left_lbl_w  <- if (length(header_left)  > 0L) max(nchar(names(header_left)))  else 0L
   right_lbl_w <- if (length(header_right) > 0L) max(nchar(names(header_right))) else 0L
 
   # Tight value widths (same logic as format_header uses)
-  left_val_w  <- .header_val_width(unname(header_left))
-  right_val_w <- .header_val_width(unname(header_right))
+  left_val_w  <- .header_val_width(header_left,  fmts = value_fmts)
+  right_val_w <- .header_val_width(header_right, fmts = value_fmts)
 
   left_block_w  <- left_lbl_w  + 3L + left_val_w
   right_block_w <- right_lbl_w + 3L + right_val_w

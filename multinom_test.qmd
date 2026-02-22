@@ -143,3 +143,17 @@ m_mn <- multinom(factor(am) ~ wt + hp, data = mtcars, trace = FALSE)
 cat("\nmultinom (binary):\n")
 tula(m_mn)
 ```
+
+---
+
+## 11 — `width` below minimum (warning + clamp to 60)
+
+**Expected:** A warning ("width cannot be less than 60; using width = 60.") is issued
+and output is produced at width = 60 rather than being suppressed.
+
+```{r width_min}
+withCallingHandlers(
+  tula(multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE), width = 30),
+  warning = function(w) { cat("Warning:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") }
+)
+```

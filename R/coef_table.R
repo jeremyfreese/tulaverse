@@ -480,7 +480,8 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'   The label column expands to fill: lbl_w = total_width - num_cols_width.
 #'
 #' @return Character vector, one element per line.
-format_coef_table <- function(coef_df, stat_label, wide, total_width) {
+format_coef_table <- function(coef_df, stat_label, wide, total_width,
+                              exp = FALSE) {
   # Fixed numeric column widths.
   # stat is 10 (was 8) so values like "-5.08e+06" don't overflow.
   # pval is 9 (was 8) for a little more breathing room around "P>|z|".
@@ -502,13 +503,17 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
   # P-value column header label
   pval_hdr <- if (stat_label == "z") "P>|z|" else "P>|t|"
 
+  # Column header labels: change when exp = TRUE
+  coef_hdr <- if (exp) "exp(b)" else "Coef."
+  se_hdr   <- if (exp) "DMSE"   else "Std. Err."
+
   # Build column header line
   if (wide) {
     hdr <- sprintf(
       "%s |%s %s %s %s %s %s",
       pad_right("", lbl_w),
-      pad_left("Coef.",     cw_coef),
-      pad_left("Std. Err.", cw_se),
+      pad_left(coef_hdr,    cw_coef),
+      pad_left(se_hdr,      cw_se),
       pad_left(stat_label,  cw_stat),
       pad_left(pval_hdr,    cw_pval),
       pad_left("[95% Conf", cw_ci),
@@ -518,8 +523,8 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
     hdr <- sprintf(
       "%s |%s %s %s %s",
       pad_right("", lbl_w),
-      pad_left("Coef.",     cw_coef),
-      pad_left("Std. Err.", cw_se),
+      pad_left(coef_hdr,    cw_coef),
+      pad_left(se_hdr,      cw_se),
       pad_left(stat_label,  cw_stat),
       pad_left(pval_hdr,    cw_pval)
     )
@@ -541,7 +546,8 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
       lines <- c(lines, paste0(lbl_fmt, " |", trailing))
 
     } else if (isTRUE(row$is_ref)) {
-      # Reference-level row: show 0 for Coef., blanks for SE/stat/p/CI
+      # Reference-level row: show 0 (or 1 when exp) for Coef., blanks for rest
+      ref_val    <- if (exp) "1" else "0"
       blank_se   <- strrep(" ", cw_se)
       blank_stat <- strrep(" ", cw_stat)
       blank_pval <- strrep(" ", cw_pval)
@@ -550,7 +556,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
         line <- sprintf(
           "%s |%s %s %s %s %s %s",
           lbl_fmt,
-          pad_left("0", cw_coef),
+          pad_left(ref_val, cw_coef),
           blank_se,
           blank_stat,
           blank_pval,
@@ -561,7 +567,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
         line <- sprintf(
           "%s |%s %s %s %s",
           lbl_fmt,
-          pad_left("0", cw_coef),
+          pad_left(ref_val, cw_coef),
           blank_se,
           blank_stat,
           blank_pval
@@ -570,12 +576,17 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
       lines <- c(lines, line)
 
     } else {
+      # When exp = TRUE, exponentiate estimate and compute delta-method SE.
+      # The test statistic and p-value are unchanged.
+      est_display <- if (exp) exp(row$estimate) else row$estimate
+      se_display  <- if (exp) exp(row$estimate) * row$std_err else row$std_err
+
       if (wide) {
         line <- sprintf(
           "%s |%s %s %s %s %s %s",
           lbl_fmt,
-          fmt_num(row$estimate,  width = cw_coef),
-          fmt_num(row$std_err,   width = cw_se),
+          fmt_num(est_display,   width = cw_coef),
+          fmt_num(se_display,    width = cw_se),
           fmt_num(row$statistic, width = cw_stat),
           fmt_pval(row$p_value,  width = cw_pval),
           fmt_num(row$ci_lower,  width = cw_ci),
@@ -585,8 +596,8 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width) {
         line <- sprintf(
           "%s |%s %s %s %s",
           lbl_fmt,
-          fmt_num(row$estimate,  width = cw_coef),
-          fmt_num(row$std_err,   width = cw_se),
+          fmt_num(est_display,   width = cw_coef),
+          fmt_num(se_display,    width = cw_se),
           fmt_num(row$statistic, width = cw_stat),
           fmt_pval(row$p_value,  width = cw_pval)
         )

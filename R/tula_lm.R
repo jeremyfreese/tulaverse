@@ -1,7 +1,13 @@
 #' @rdname tula
 #' @export
-tula.lm <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
-                    width = NULL, ...) {
+tula.lm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
+                    width = NULL, exp = FALSE, ...) {
+  # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
+  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
+    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
+    wide <- FALSE
+  }
+  wide   <- .resolve_wide(wide, width)
   s      <- summary(model)
   n_obs  <- stats::nobs(model)
   r2     <- s$r.squared
@@ -35,6 +41,8 @@ tula.lm <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
     stat_label   = "t",
     wide         = wide,
     family_label = NULL,
-    width    = width
+    width        = width,
+    value_fmts   = c(AIC = "f3", BIC = "f3"),
+    exp          = exp
   )
 }

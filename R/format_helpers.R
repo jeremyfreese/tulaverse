@@ -62,9 +62,15 @@ fmt_pval <- function(p, width = 8) {
 #' @param x Numeric scalar.
 #' @param width Minimum field width (right-aligned). Pass 1 to get the
 #'   natural/trimmed width.
+#' @param fmt Format override: `"g4"` (default) uses 4 significant digits;
+#'   `"f3"` uses fixed notation with up to 3 decimal places (suitable for
+#'   log-likelihoods, which can have many digits before the decimal point).
 #' @return Character string of at least `width` characters, right-aligned.
-fmt_header_val <- function(x, width = 10) {
+fmt_header_val <- function(x, width = 10, fmt = "g4") {
   if (is.na(x) || is.null(x)) return(strrep(" ", width))
+  if (fmt == "f3") {
+    return(formatC(round(x, 3L), format = "f", digits = 3L, width = width))
+  }
   if (is.integer(x) || (is.numeric(x) && x == round(x) && abs(x) < 1e9)) {
     return(formatC(as.integer(x), format = "d", width = width))
   }

@@ -11,9 +11,10 @@
 #' by a horizontal line.
 #'
 #' @param model A fitted model object. Currently supported: `lm`, `glm`.
-#' @param wide Logical. If `FALSE` (the default), confidence intervals are
-#'   omitted and the output is narrower. If `TRUE`, 95% confidence interval
-#'   columns are added.
+#' @param wide Logical or `NULL`. If `TRUE`, 95% confidence interval columns
+#'   are added. If `FALSE`, they are omitted. If `NULL` (the default),
+#'   confidence intervals are shown automatically when the effective output
+#'   width is 80 or more, and omitted when it is narrower.
 #' @param ref Logical. If `FALSE` (the default), the reference category of
 #'   each factor variable is omitted. If `TRUE`, it is shown as the last row
 #'   within its group, with a coefficient of 0 and blanks for SE, statistic,
@@ -43,6 +44,13 @@
 #'   used when formatting numeric values (mean, SD/MAD/IQR, min, max).
 #'   Default 7, which avoids scientific notation for numbers up to 9,999,999.
 #'   Ignored for regression output (which always uses 4 significant digits).
+#' @param exp Logical. If `TRUE`, coefficients are exponentiated: the estimate
+#'   column shows `exp(b)` and the standard error column shows the delta-method
+#'   standard error (`exp(b) * SE(b)`), labelled `"DMSE"`. The test statistic
+#'   and p-value are unchanged. Reference-level rows show `1` instead of `0`.
+#'   When `exp = TRUE`, confidence interval columns are suppressed (`wide` is
+#'   forced to `FALSE`); exponentiated CIs may be supported in a future version.
+#'   Default `FALSE`. Ignored for summarize output.
 #' @param ... Additional arguments passed to model-specific methods (reserved
 #'   for future extensions).
 #'
@@ -63,9 +71,9 @@
 #' tula(mtcars, sep = 3, median = TRUE)
 #'
 #' @export
-tula <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
+tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                 digits = 7L, ...) {
+                 digits = 7L, exp = FALSE, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -74,9 +82,9 @@ tula <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
 
 #' @rdname tula
 #' @export
-tula.default <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
+tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                          width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                         digits = 7L, ...) {
+                         digits = 7L, exp = FALSE, ...) {
   # Atomic vectors (numeric, integer, logical, character, factor) are routed
   # to the summarize path.  Matrices and other dimensioned objects are not
   # supported.
@@ -106,9 +114,9 @@ tula.default <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
 
 #' @rdname tula
 #' @export
-tula.data.frame <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
+tula.data.frame <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                              width = NULL, sep = 5L, mad = FALSE,
-                             median = FALSE, digits = 7L, ...) {
+                             median = FALSE, digits = 7L, exp = FALSE, ...) {
   .tula_summarize(model, width = width, sep = sep, mad = mad, median = median,
                   digits = digits)
 }
@@ -137,7 +145,9 @@ new_tula_output <- function(model_type,
                             stat_label,
                             wide,
                             family_label = NULL,
-                            width        = NULL) {
+                            width        = NULL,
+                            value_fmts   = character(0L),
+                            exp          = FALSE) {
   structure(
     list(
       model_type   = model_type,
@@ -147,7 +157,9 @@ new_tula_output <- function(model_type,
       stat_label   = stat_label,
       wide         = wide,
       family_label = family_label,
-      width        = width
+      width        = width,
+      value_fmts   = value_fmts,
+      exp          = exp
     ),
     class = "tula_output"
   )
@@ -157,6 +169,31 @@ new_tula_output <- function(model_type,
 # the output object — they are consumed entirely by build_coef_df().
 .parse_tula_opts <- function(ref, label) {
   list(ref = isTRUE(ref), label = isTRUE(label))
+}
+
+# Resolve the effective output width at print time.
+# - NULL    → read getOption("width") now (reflects current console width)
+# - Inf     → pass through (unlimited width)
+# - numeric → if < 60, warn and clamp to 60; otherwise use as-is
+.resolve_width <- function(width) {
+  w <- if (is.null(width)) getOption("width") else width
+  if (!is.infinite(w) && w < 60L) {
+    warning("width cannot be less than 60; using width = 60.", call. = FALSE)
+    w <- 60L
+  }
+  w
+}
+
+# Resolve the effective wide setting at method-dispatch time.
+# - NULL  → TRUE if the effective output width >= 80, FALSE otherwise
+# - TRUE/FALSE → used as-is
+# `width` here is the raw user-supplied width (NULL or a number), resolved
+# the same way as .resolve_width() for the threshold comparison only.
+.resolve_wide <- function(wide, width) {
+  if (!is.null(wide)) return(isTRUE(wide))
+  w <- if (is.null(width)) getOption("width") else width
+  if (!is.infinite(w) && w < 60L) w <- 60L   # match clamping logic
+  w >= 80L
 }
 
 
@@ -180,7 +217,9 @@ new_tula_multinom_output <- function(header_left,
                                      base_outcome,
                                      stat_label = "z",
                                      wide       = FALSE,
-                                     width      = NULL) {
+                                     width      = NULL,
+                                     value_fmts = character(0L),
+                                     exp        = FALSE) {
   structure(
     list(
       header_left  = header_left,
@@ -189,7 +228,9 @@ new_tula_multinom_output <- function(header_left,
       base_outcome = base_outcome,
       stat_label   = stat_label,
       wide         = wide,
-      width        = width
+      width        = width,
+      value_fmts   = value_fmts,
+      exp          = exp
     ),
     class = "tula_multinom_output"
   )
@@ -200,14 +241,17 @@ new_tula_multinom_output <- function(header_left,
 #'
 #' Prints Stata-style multinomial logit output: a shared header block,
 #' then one coefficient table per non-base outcome separated by dashed
-#' lines, then a "Base outcome:" footer line.
+#' lines, then a "Base outcome:" footer line. Each outcome label appears
+#' on the same line as the column headers (Coef., Std. Err., etc.),
+#' in the label-column area, truncated if necessary so the | stays aligned.
 #'
 #' @param x A `tula_multinom_output` object.
 #' @param ... Ignored.
 #' @return Invisibly returns `x`.
 #' @export
 print.tula_multinom_output <- function(x, ...) {
-  max_w <- if (is.null(x$width)) getOption("width") else x$width
+  max_w <- .resolve_width(x$width)
+  vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
   # Compute total width from the shared header and the widest label across
   # all outcome blocks.
@@ -217,41 +261,58 @@ print.tula_multinom_output <- function(x, ...) {
     header_left  = x$header_left,
     header_right = x$header_right,
     coef_labels  = all_labels,
-    wide         = x$wide
+    wide         = x$wide,
+    value_fmts   = vf
   )
   total_width <- min(natural_width, max_w)
 
   sep_line <- char_rep("-", total_width)
 
+  # Derive the label-column width (mirrors format_coef_table internals).
+  # num_cols_w: " |"(2) + coef(10) sp(1) + se(10) sp(1) + stat(10) sp(1) + pval(9)
+  num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L
+  if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
+  lbl_w <- total_width - num_cols_w
+
   # Shared header (printed once above all outcome blocks)
   header_lines <- format_header(x$header_left, x$header_right,
-                                total_width = total_width)
+                                total_width = total_width,
+                                value_fmts  = vf)
   cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
 
   # One coefficient block per non-base outcome.
   # format_coef_table() returns: [sep, hdr, sep, ...rows..., sep]
-  # We strip the first and last separator from each block, then wrap the
-  # whole block with a single leading sep + outcome label and a single
-  # trailing sep, so the layout between blocks is exactly one separator:
+  #
+  # Layout per block:
   #   sep
-  #   <outcome>
-  #   hdr
+  #   <outcome label>  |  Coef.  Std. Err.  z  P>|z|  ...
   #   sep
   #   ...rows...
-  #   sep          <- this serves as both the block closer and the next block opener
-  #   <next outcome>
-  #   ...
+  #   sep   <- serves as both block closer and next-block opener
+  #
+  # The outcome label is embedded in the label-column area of the column-
+  # header row (inner_lines[1]), replacing the blank padding. It is
+  # truncated with .truncate_label() so the | remains aligned.
   for (i in seq_along(x$blocks)) {
     blk <- x$blocks[[i]]
     table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
-                                     total_width = total_width)
+                                     total_width = total_width,
+                                     exp = isTRUE(x$exp))
     # table_lines: [sep, hdr, sep, ...rows..., sep]
-    # Drop first (opening sep) — replaced by our sep_line + outcome label.
-    # Drop last (closing sep) — we print it manually so we control the
-    # boundary: for the last block we still want a final sep before the footer.
+    # Drop first sep — replaced by sep_line printed below.
+    # Drop last sep  — printed manually after the loop so we always get a
+    # final separator before the "Base outcome:" footer.
     inner_lines <- table_lines[-c(1L, length(table_lines))]
+
+    # Embed the outcome label in the label-column area of the header row.
+    # inner_lines[1] is: "{lbl_w spaces} |  Coef.  Std. Err. ..."
+    # Replace the leading spaces with the (possibly truncated) outcome label.
+    outcome_lbl <- .truncate_label(blk$outcome, lbl_w)
+    hdr_line    <- inner_lines[1L]
+    inner_lines[1L] <- paste0(pad_right(outcome_lbl, lbl_w),
+                              substring(hdr_line, lbl_w + 1L))
+
     cat(sep_line, "\n", sep = "")
-    cat(blk$outcome, "\n", sep = "")
     cat(paste(inner_lines, collapse = "\n"), "\n", sep = "")
   }
   cat(sep_line, "\n", sep = "")
@@ -274,19 +335,16 @@ print.tula_multinom_output <- function(x, ...) {
 #' @return Invisibly returns `x`.
 #' @export
 print.tula_output <- function(x, ...) {
-  # Resolve width: NULL means "read the option at print time", so that
-  # the cap always reflects the user's current console width rather than the
-  # width at the time tula() was called.
-  max_w <- if (is.null(x$width)) getOption("width") else x$width
+  # Resolve width: NULL → getOption("width") at print time; validates >= 60.
+  max_w <- .resolve_width(x$width)
+  vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
-  # Compute the natural shared width, then cap at max_w.
-  # min(..., Inf) passes through unchanged; any integer squeezes the label
-  # column (truncation happens in format_coef_table via the existing ~ logic).
   natural_width <- compute_total_width(
     header_left  = x$header_left,
     header_right = x$header_right,
     coef_labels  = x$coef_df$label,
-    wide         = x$wide
+    wide         = x$wide,
+    value_fmts   = vf
   )
   total_width <- min(natural_width, max_w)
 
@@ -297,12 +355,14 @@ print.tula_output <- function(x, ...) {
 
   # Two-column header block
   header_lines <- format_header(x$header_left, x$header_right,
-                                total_width = total_width)
+                                total_width = total_width,
+                                value_fmts  = vf)
   cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
 
   # Coefficient table
   table_lines <- format_coef_table(x$coef_df, x$stat_label, x$wide,
-                                   total_width = total_width)
+                                   total_width = total_width,
+                                   exp = isTRUE(x$exp))
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
 
   invisible(x)

@@ -1,9 +1,15 @@
 #' @rdname tula
 #' @export
-tula.multinom <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
-                          width = NULL, ...) {
-  s   <- summary(model)
-  mf  <- model.frame(model)
+tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
+                          width = NULL, exp = FALSE, ...) {
+  # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
+  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
+    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
+    wide <- FALSE
+  }
+  wide <- .resolve_wide(wide, width)
+  s    <- summary(model)
+  mf   <- model.frame(model)
   n   <- nrow(mf)
 
   # Outcome levels: all levels, first is the base
@@ -26,8 +32,22 @@ tula.multinom <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
   z_mat <- coef_mat / se_mat
   p_mat <- 2 * stats::pnorm(-abs(z_mat))
 
-  # Confidence intervals: 3-D array [predictors x bounds x outcomes] or NULL
-  ci_arr <- if (wide) tryCatch(confint(model), error = function(e) NULL) else NULL
+  # Confidence intervals: 3-D array [predictors x bounds x outcomes] or NULL.
+  # For binary outcomes (K=2), confint() returns a plain 2-D matrix instead
+  # of a 3-D array; promote it to a 3-D array with a single named slice so
+  # the per-block extraction code below works uniformly.
+  ci_arr <- if (wide) {
+    tryCatch({
+      ci_raw <- confint(model)
+      if (is.matrix(ci_raw)) {
+        # Binary case: reshape [P x 2] -> [P x 2 x 1] named by the one non-base level
+        array(ci_raw, dim = c(nrow(ci_raw), 2L, 1L),
+              dimnames = list(rownames(ci_raw), colnames(ci_raw), out_lev))
+      } else {
+        ci_raw
+      }
+    }, error = function(e) NULL)
+  } else NULL
 
   # Header metrics (same structure as glm)
   ll <- as.numeric(stats::logLik(model))
@@ -101,6 +121,8 @@ tula.multinom <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
     base_outcome = base_lev,
     stat_label   = "z",
     wide         = wide,
-    width        = width
+    width        = width,
+    value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
+    exp          = exp
   )
 }
