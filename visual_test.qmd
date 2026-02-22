@@ -15,6 +15,7 @@ execute:
 ```{r setup}
 # Load the tula package from source.
 # Run this script from the Koala/ package directory, or set the path below.
+library(nnet)
 devtools::load_all(".")
 ```
 
@@ -357,4 +358,100 @@ are exactly the same width as the separator lines in wide mode.
 ```{r test22}
 m22 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
 tula(m22, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 23 — multinom: basic three-outcome model
+
+**Expected:** Shared header (AIC, BIC, Log likelihood / N, McFadden R-sq).
+Two outcome blocks (`6`, `8`) each separated by a dashed line with the outcome
+label between. `(Intercept)` at the bottom of each block. Footer: `Base outcome: 4`.
+
+```{r test23}
+m23 <- multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE)
+cat("Narrow:\n")
+tula(m23)
+cat("\nWide:\n")
+tula(m23, wide = TRUE)
+```
+
+---
+
+## Test 24 — multinom: factor predictor, grouping in each block
+
+**Expected:** `am` appears as a grouped factor header with indented level `1`
+in every outcome block — the same Stata-style grouping as lm/glm.
+
+```{r test24}
+m24 <- multinom(factor(cyl) ~ wt + hp + factor(am), data = mtcars, trace = FALSE)
+cat("Narrow:\n")
+tula(m24)
+```
+
+---
+
+## Test 25 — multinom: `ref = TRUE`
+
+**Expected:** Each factor group in every outcome block gets a `0 (base)` row
+appended after its non-reference levels. Numeric columns blank on that row.
+
+```{r test25}
+cat("ref = TRUE, narrow:\n")
+tula(m24, ref = TRUE)
+cat("\nref = TRUE, wide:\n")
+tula(m24, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 26 — multinom: four-outcome model
+
+**Expected:** Three outcome blocks (S, M, L with XS as base), each containing
+a `Species` factor group and a `Sepal.Width` row. Header and footer correct.
+
+```{r test26}
+iris4 <- iris
+iris4$size <- cut(iris$Sepal.Length,
+                  breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
+                  labels = c("XS", "S", "M", "L"),
+                  include.lowest = TRUE)
+m26 <- multinom(size ~ Sepal.Width + Species, data = iris4, trace = FALSE)
+tula(m26)
+```
+
+---
+
+## Test 27 — multinom: `width` option forces label truncation
+
+**Expected:** Long labels truncated with `~` in every outcome block; separators
+and all rows the same width.
+
+```{r test27}
+df27 <- mtcars
+names(df27)[names(df27) == "wt"] <- "vehicle_weight_lbs"
+names(df27)[names(df27) == "hp"] <- "gross_horsepower_bhp"
+m27 <- multinom(factor(cyl) ~ vehicle_weight_lbs + gross_horsepower_bhp,
+                data = df27, trace = FALSE)
+cat("Default width:\n")
+tula(m27)
+cat("\nwidth = 68:\n")
+tula(m27, width = 68)
+```
+
+---
+
+## Test 28 — multinom vs glm on binary outcome (sanity check)
+
+**Expected:** Coefficients, SEs, z-stats, and p-values from `multinom()` on a
+two-level outcome should match those from `glm(..., family = binomial)` closely
+(up to sign conventions — multinom models log-odds of level 2 vs level 1).
+
+```{r test28}
+m28_glm <- glm(am ~ wt + hp, data = mtcars, family = binomial)
+m28_mn  <- multinom(factor(am) ~ wt + hp, data = mtcars, trace = FALSE)
+cat("glm (logistic):\n")
+tula(m28_glm)
+cat("\nmultinom (binary):\n")
+tula(m28_mn)
 ```
