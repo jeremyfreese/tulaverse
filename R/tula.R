@@ -228,15 +228,33 @@ print.tula_multinom_output <- function(x, ...) {
                                 total_width = total_width)
   cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
 
-  # One coefficient block per non-base outcome
-  for (blk in x$blocks) {
-    # Outcome label line, left-aligned, between separators
-    cat(sep_line, "\n", sep = "")
-    cat(blk$outcome, "\n", sep = "")
+  # One coefficient block per non-base outcome.
+  # format_coef_table() returns: [sep, hdr, sep, ...rows..., sep]
+  # We strip the first and last separator from each block, then wrap the
+  # whole block with a single leading sep + outcome label and a single
+  # trailing sep, so the layout between blocks is exactly one separator:
+  #   sep
+  #   <outcome>
+  #   hdr
+  #   sep
+  #   ...rows...
+  #   sep          <- this serves as both the block closer and the next block opener
+  #   <next outcome>
+  #   ...
+  for (i in seq_along(x$blocks)) {
+    blk <- x$blocks[[i]]
     table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
                                      total_width = total_width)
-    cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
+    # table_lines: [sep, hdr, sep, ...rows..., sep]
+    # Drop first (opening sep) — replaced by our sep_line + outcome label.
+    # Drop last (closing sep) — we print it manually so we control the
+    # boundary: for the last block we still want a final sep before the footer.
+    inner_lines <- table_lines[-c(1L, length(table_lines))]
+    cat(sep_line, "\n", sep = "")
+    cat(blk$outcome, "\n", sep = "")
+    cat(paste(inner_lines, collapse = "\n"), "\n", sep = "")
   }
+  cat(sep_line, "\n", sep = "")
 
   # Base outcome footer
   cat("Base outcome: ", x$base_outcome, "\n", sep = "")
