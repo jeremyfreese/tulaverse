@@ -346,6 +346,7 @@ format_summary_table <- function(rows, opts, total_width) {
     s <- trimws(s)
   }
 
+  s <- .strip_lead_zero(s)
   formatC(s, width = width, flag = " ")
 }
 

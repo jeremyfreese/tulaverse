@@ -1,9 +1,26 @@
 #' @keywords internal
 #'
+#' Strip the leading zero from a formatted numeric string.
+#'
+#' Converts "0.43" -> ".43", "-0.43" -> "-.43". Leaves strings that do not
+#' match (integers, scientific notation, "< .0001", etc.) unchanged.
+#' Applied after formatting so the column-width padding is recalculated
+#' against the shorter string.
+.strip_lead_zero <- function(s) {
+  # Positive: " 0." or "0." at the start (may be preceded by spaces)
+  s <- sub("^( *)0\\.", "\\1.", s)
+  # Negative: "-0." anywhere (only occurs right after optional spaces)
+  s <- sub("^( *)-0\\.", "\\1-.", s)
+  s
+}
+
+#' @keywords internal
+#'
 #' Format a numeric value for coefficient table columns.
 #'
 #' Uses formatC with 'g' format (significant figures, drops trailing zeros).
 #' Returns a blank string of the same width for NA values.
+#' Leading zeros are suppressed ("0.43" -> ".43").
 #'
 #' @param x Numeric scalar.
 #' @param digits Number of significant digits (default 4).
@@ -11,7 +28,9 @@
 #' @return Character string of exactly `width` characters.
 fmt_num <- function(x, digits = 4, width = 10) {
   if (is.na(x)) return(strrep(" ", width))
-  formatC(x, digits = digits, format = "g", width = width, flag = " ")
+  s <- formatC(x, digits = digits, format = "g", flag = " ")
+  s <- .strip_lead_zero(s)
+  formatC(s, width = width, flag = " ")
 }
 
 #' @keywords internal
@@ -19,6 +38,7 @@ fmt_num <- function(x, digits = 4, width = 10) {
 #' Format a p-value for display.
 #'
 #' Shows "< .0001" when p < 0.0001; otherwise 4 decimal places.
+#' Leading zeros are suppressed ("0.0324" -> ".0324").
 #'
 #' @param p Numeric scalar.
 #' @param width Column width in characters (default 8).
@@ -26,6 +46,7 @@ fmt_num <- function(x, digits = 4, width = 10) {
 fmt_pval <- function(p, width = 8) {
   if (is.na(p)) return(strrep(" ", width))
   s <- if (p < 0.0001) "< .0001" else sprintf("%.4f", p)
+  s <- .strip_lead_zero(s)
   formatC(s, width = width, flag = " ")
 }
 
