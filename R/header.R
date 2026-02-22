@@ -124,8 +124,8 @@ compute_total_width <- function(header_left, header_right, coef_labels,
   header_min_w  <- left_block_w + col_gap_min + right_block_w
 
   # Numeric portion of the table:
-  # " |" (2) + coef(10) sp(1) + se(10) sp(1) + stat(8) sp(1) + pval(8)
-  num_cols_w <- 2L + 10L + 1L + 10L + 1L + 8L + 1L + 8L
+  # " |" (2) + coef(10) sp(1) + se(10) sp(1) + stat(10) sp(1) + pval(9)
+  num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L
   if (wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
 
   # Minimum table width = longest coef label + numeric columns

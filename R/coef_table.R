@@ -481,11 +481,13 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'
 #' @return Character vector, one element per line.
 format_coef_table <- function(coef_df, stat_label, wide, total_width) {
-  # Fixed numeric column widths
+  # Fixed numeric column widths.
+  # stat is 10 (was 8) so values like "-5.08e+06" don't overflow.
+  # pval is 9 (was 8) for a little more breathing room around "P>|z|".
   cw_coef <- 10L
   cw_se   <- 10L
-  cw_stat <-  8L
-  cw_pval <-  8L
+  cw_stat <- 10L
+  cw_pval <-  9L
   cw_ci   <- 10L   # each CI bound
 
   # Numeric portion width (includes the " |" separator after label)
