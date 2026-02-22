@@ -12,49 +12,91 @@
 #'
 #' @param model A fitted model object (lm, glm, ...).
 #' @param ct Matrix from `coef(summary(model))`: columns are estimate, SE,
-#'   statistic, p-value; rows are named by coefficient.
+#'   statistic, p-value; rows are named by coefficient. Required.
 #' @param ci Matrix from `confint()` or NULL. Row names match `ct`.
 #' @param wide Logical. If TRUE, ci_lower and ci_upper are populated.
 #' @param ref Logical. If TRUE, show the reference level of each factor as the
 #'   last row in its group, with estimate = 0 and blanks for SE/stat/p.
 #' @param label Logical. If TRUE, use haven value labels for factor levels when
 #'   available.
+#' @param assign_vec Optional integer vector: the `assign` attribute of the
+#'   model matrix (0 = intercept, k = k-th term). When NULL, extracted via
+#'   `attr(model.matrix(model), "assign")`. Supply explicitly for models where
+#'   `model.matrix()` is unavailable or returns a non-standard result.
+#' @param term_labels Optional character vector of term labels (the
+#'   `"term.labels"` attribute of `terms(model)`). Supply with `assign_vec`.
+#' @param data_classes Optional named character vector of data classes (the
+#'   `"dataClasses"` attribute of `terms(model)`), used to identify factor
+#'   terms. Supply with `assign_vec` and `term_labels`.
+#' @param xlevels Optional named list mapping factor term names to their level
+#'   vectors (equivalent to `model$xlevels`). Used to identify the reference
+#'   level when `ref = TRUE`. Supply when `model$xlevels` is absent.
+#' @param model_frame Optional data frame (equivalent to `model.frame(model)`),
+#'   used for haven label lookup. Supply when `model.frame()` is unavailable.
+#' @param orig_data Optional data frame: the raw input data, used as a fallback
+#'   for haven label lookup when factor-wrapping in the formula strips labels.
 #'
 #' @return A data frame with columns:
 #'   label, is_factor_header, is_intercept, is_ref,
 #'   estimate, std_err, statistic, p_value, ci_lower, ci_upper.
-build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE) {
+build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
+                          assign_vec   = NULL,
+                          term_labels  = NULL,
+                          data_classes = NULL,
+                          xlevels      = NULL,
+                          model_frame  = NULL,
+                          orig_data    = NULL) {
   coef_names <- rownames(ct)
 
-  # Retrieve term-to-column mapping from the model matrix
-  mm          <- model.matrix(model)
-  assign_vec  <- attr(mm, "assign")          # one int per mm column
-  term_labels <- attr(terms(model), "term.labels")
-  data_classes <- tryCatch(
-    attr(terms(model), "dataClasses"),
-    error = function(e) character(0)
-  )
-  xlevels <- if (!is.null(model$xlevels)) model$xlevels else list()
+  # Retrieve term-to-column mapping from the model matrix.
+  # Callers may supply these directly for models where model.matrix() is
+  # unavailable or returns a non-standard structure.
+  if (is.null(assign_vec) || is.null(term_labels)) {
+    mm          <- tryCatch(model.matrix(model), error = function(e) NULL)
+    assign_vec  <- if (!is.null(mm)) attr(mm, "assign") else
+                   rep(seq_along(coef_names) - 1L, 1L)  # fallback: 0,1,2,...
+    term_labels <- if (!is.null(mm))
+      attr(terms(model), "term.labels") else character(0)
+  }
 
-  # Model frame for label lookup (haven labels live here for bare variables)
-  mf <- tryCatch(model.frame(model), error = function(e) NULL)
+  if (is.null(data_classes)) {
+    data_classes <- tryCatch(
+      attr(terms(model), "dataClasses"),
+      error = function(e) character(0)
+    )
+  }
 
-  # Original data frame (if recoverable) for label lookup when the variable
-  # is wrapped in factor() in the formula (factor() drops the labels attr
-  # during model.frame evaluation, so we need the raw column).
-  orig_data <- tryCatch(
-    eval(model$call$data, envir = environment(formula(model))),
-    error = function(e) NULL
-  )
+  if (is.null(xlevels)) {
+    xlevels <- if (!is.null(model$xlevels)) model$xlevels else list()
+  }
+
+  # Model frame for label lookup (haven labels live here for bare variables).
+  # Use caller-supplied value if provided; otherwise try model.frame().
+  mf <- if (!is.null(model_frame)) model_frame else
+        tryCatch(model.frame(model), error = function(e) NULL)
+
+  # Original data frame for label lookup when the variable is wrapped in
+  # factor() in the formula. Use caller-supplied value if provided.
+  orig_data <- if (!is.null(orig_data)) orig_data else
+    tryCatch(
+      eval(model$call$data, envir = environment(formula(model))),
+      error = function(e) NULL
+    )
 
   # Build a mapping from model-matrix column index to term name.
-  # assign_vec uses 0 for intercept, 1-based for terms.
+  # assign_vec uses 0 for intercept-type terms, 1-based for other terms.
+  # We use the assign_vec position rather than coefficient names so that
+  # models with non-standard intercept names (or no intercept at all) work.
   term_for_coef <- function(i) {
-    # i is the row index in ct / column index in mm (1-based)
     tidx <- assign_vec[i]
     if (tidx == 0L) return("(Intercept)")
     term_labels[tidx]
   }
+
+  # Which positions in ct correspond to intercept-type terms (assign == 0)?
+  # Using assign_vec rather than name-matching so models that omit an intercept
+  # or name it differently (e.g. no parentheses) are handled correctly.
+  intercept_positions <- which(assign_vec == 0L)
 
   # Determine whether a term is a factor type
   is_factor_term <- function(term_nm) {
@@ -112,8 +154,9 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE) {
   for (i in seq_along(coef_names)) {
     nm <- coef_names[i]
 
-    # Intercept handled separately at end
-    if (nm == "(Intercept)") next
+    # Intercept-type terms are handled separately at end (identified by
+    # assign_vec == 0, not by name, so models with no/renamed intercept work)
+    if (i %in% intercept_positions) next
 
     term_nm <- term_for_coef(i)
     is_fac  <- is_factor_term(term_nm)
@@ -163,13 +206,14 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE) {
     }
   }
 
-  # Intercept goes last
-  int_i <- which(coef_names == "(Intercept)")
-  if (length(int_i) > 0L) {
+  # Intercept-type terms go last (identified by assign_vec == 0).
+  # There may be zero (e.g. Cox models) or more than one (uncommon but possible).
+  # Each is labelled with its actual coefficient name from the model.
+  for (int_i in intercept_positions) {
     rows[[length(rows) + 1L]] <- .make_coef_row(
-      label        = "(Intercept)",
+      label        = coef_names[int_i],
       is_intercept = TRUE,
-      nm           = "(Intercept)",
+      nm           = coef_names[int_i],
       ct           = ct,
       ci           = ci,
       i            = int_i
