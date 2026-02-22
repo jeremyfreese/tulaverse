@@ -160,6 +160,91 @@ new_tula_output <- function(model_type,
 }
 
 
+# ---------------------------------------------------------------------------
+# Internal constructor for tula_multinom_output S3 objects.
+#
+# Fields:
+#   header_left  - named numeric vector: left-column header entries
+#   header_right - named numeric vector: right-column header entries
+#   blocks       - list of lists, one per non-base outcome:
+#                    $outcome  character: outcome label
+#                    $coef_df  data.frame from build_coef_df()
+#   base_outcome - character: label of the base (reference) outcome
+#   stat_label   - "z"
+#   wide         - logical: were CIs requested?
+#   width        - integer, Inf, or NULL
+# ---------------------------------------------------------------------------
+new_tula_multinom_output <- function(header_left,
+                                     header_right,
+                                     blocks,
+                                     base_outcome,
+                                     stat_label = "z",
+                                     wide       = FALSE,
+                                     width      = NULL) {
+  structure(
+    list(
+      header_left  = header_left,
+      header_right = header_right,
+      blocks       = blocks,
+      base_outcome = base_outcome,
+      stat_label   = stat_label,
+      wide         = wide,
+      width        = width
+    ),
+    class = "tula_multinom_output"
+  )
+}
+
+
+#' Print method for tula_multinom_output objects
+#'
+#' Prints Stata-style multinomial logit output: a shared header block,
+#' then one coefficient table per non-base outcome separated by dashed
+#' lines, then a "Base outcome:" footer line.
+#'
+#' @param x A `tula_multinom_output` object.
+#' @param ... Ignored.
+#' @return Invisibly returns `x`.
+#' @export
+print.tula_multinom_output <- function(x, ...) {
+  max_w <- if (is.null(x$width)) getOption("width") else x$width
+
+  # Compute total width from the shared header and the widest label across
+  # all outcome blocks.
+  all_labels <- unlist(lapply(x$blocks, function(b) b$coef_df$label))
+
+  natural_width <- compute_total_width(
+    header_left  = x$header_left,
+    header_right = x$header_right,
+    coef_labels  = all_labels,
+    wide         = x$wide
+  )
+  total_width <- min(natural_width, max_w)
+
+  sep_line <- char_rep("-", total_width)
+
+  # Shared header (printed once above all outcome blocks)
+  header_lines <- format_header(x$header_left, x$header_right,
+                                total_width = total_width)
+  cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+
+  # One coefficient block per non-base outcome
+  for (blk in x$blocks) {
+    # Outcome label line, left-aligned, between separators
+    cat(sep_line, "\n", sep = "")
+    cat(blk$outcome, "\n", sep = "")
+    table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
+                                     total_width = total_width)
+    cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
+  }
+
+  # Base outcome footer
+  cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+
+  invisible(x)
+}
+
+
 #' Print method for tula_output objects
 #'
 #' Assembles and prints the full Stata-style output. Called automatically

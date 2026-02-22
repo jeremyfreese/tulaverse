@@ -222,6 +222,64 @@ tula.coxph <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
 
 ---
 
+## Multinomial logit (`nnet::multinom`)
+
+### Key structural differences from lm/glm
+
+- `coef(m)` is a `(K−1) × P` matrix — rows = non-base outcomes, cols = predictors.
+- `summary(m)` provides `$coefficients` and `$standard.errors` separately; z-stats
+  and p-values must be computed manually: `z = coef/SE`, `p = 2*pnorm(-|z|)`.
+- `confint(m)` returns a **3-D array** `[predictors × bounds × outcome-levels]`;
+  slice per outcome with `ci_arr[ , , lv, drop=FALSE]`.
+- `nobs()` has no registered method; use `nrow(model.frame(m))`.
+- `model.matrix()`, `terms()`, and `m$xlevels` all work normally.
+
+### Output object: `tula_multinom_output`
+
+Distinct from `tula_output`. Fields:
+
+```r
+list(
+  header_left  = c(...),    # AIC, BIC, Log likelihood
+  header_right = c(...),    # Number of obs, McFadden R-sq
+  blocks       = list(      # one list per non-base outcome
+    list(outcome = "6", coef_df = <data.frame>),
+    list(outcome = "8", coef_df = <data.frame>)
+  ),
+  base_outcome = "4",       # label of reference outcome
+  stat_label   = "z",
+  wide         = FALSE,
+  width        = NULL
+)
+```
+
+### Print layout
+
+```
+<shared header block>
+--------------------------------------------------
+<outcome label>
+<coefficient table>   # one table per non-base outcome
+--------------------------------------------------
+<outcome label>
+<coefficient table>
+--------------------------------------------------
+Base outcome: <base_outcome>
+```
+
+### McFadden R²
+
+Null log-likelihood = `N * log(1/K)` where K = number of outcome levels.
+`McFadden = 1 - LL_fitted / LL_null`.
+
+### `build_coef_df()` is called once per outcome block
+
+The same `assign_vec`, `term_labels`, `data_classes`, `xlevels`, and
+`model_frame` are extracted once and passed explicitly to each call,
+avoiding redundant computation.
+
+---
+
 ## Summarize path architecture
 
 Called when `tula()` receives a data frame, tibble, or atomic vector.

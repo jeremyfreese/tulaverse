@@ -1,0 +1,145 @@
+---
+title: "tula — Multinomial Logit Output Exploration"
+format:
+  html:
+    embed-resources: true
+    code-fold: false
+    toc: true
+    toc-depth: 2
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r setup}
+library(nnet)
+devtools::load_all(".")
+set.seed(42)
+```
+
+This file tests `tula()` for `multinom` objects from `nnet::multinom()`.
+
+---
+
+## 1 — Basic three-outcome model (numeric predictors only)
+
+Three cylinder levels in `mtcars`. Base outcome is 4 (the first level).
+
+```{r basic}
+m1 <- multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE)
+tula(m1)
+```
+
+---
+
+## 2 — With a factor predictor
+
+Tests that factor grouping (Stata-style header + indented levels) works
+across all outcome blocks.
+
+```{r factor-predictor}
+m2 <- multinom(factor(cyl) ~ wt + hp + factor(am), data = mtcars, trace = FALSE)
+tula(m2)
+```
+
+---
+
+## 3 — ref = TRUE
+
+Reference level row should appear within each factor group in every block.
+
+```{r ref-true}
+tula(m2, ref = TRUE)
+```
+
+---
+
+## 4 — wide = TRUE (confidence intervals)
+
+CI columns should appear in every outcome block.
+
+```{r wide}
+tula(m2, wide = TRUE)
+```
+
+---
+
+## 5 — wide = TRUE and ref = TRUE together
+
+```{r wide-ref}
+tula(m2, wide = TRUE, ref = TRUE)
+```
+
+---
+
+## 6 — Two-outcome model (binary, as a sanity check)
+
+When only one non-base outcome exists the output should be a single block.
+
+```{r binary}
+m3 <- multinom(factor(am) ~ wt + hp + factor(cyl), data = mtcars, trace = FALSE)
+tula(m3)
+```
+
+---
+
+## 7 — Four-outcome model
+
+Uses the `iris` species (three outcomes) and a continuous predictor.
+
+```{r four-outcome}
+# Create a four-level outcome for a more demanding test
+iris4 <- iris
+iris4$size <- cut(iris$Sepal.Length,
+                  breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
+                  labels = c("XS", "S", "M", "L"),
+                  include.lowest = TRUE)
+m4 <- multinom(size ~ Sepal.Width + Petal.Length + Species,
+               data = iris4, trace = FALSE)
+tula(m4)
+```
+
+---
+
+## 8 — width option
+
+Narrower width forces label truncation.
+
+```{r width}
+cat("width = 72:\n")
+tula(m2, width = 72)
+```
+
+---
+
+## 9 — Long predictor names
+
+Tests label truncation in a multinomial context.
+
+```{r long-names}
+df_long <- mtcars
+names(df_long)[which(names(df_long) == "wt")]  <- "vehicle_weight_lbs"
+names(df_long)[which(names(df_long) == "hp")]  <- "gross_horsepower_bhp"
+m5 <- multinom(factor(cyl) ~ vehicle_weight_lbs + gross_horsepower_bhp,
+               data = df_long, trace = FALSE)
+tula(m5)
+```
+
+---
+
+## 10 — Comparison: glm on binary outcome vs multinom
+
+Both should give identical (or near-identical) coefficients.
+
+```{r compare}
+# glm logistic
+m_glm <- glm(am ~ wt + hp, data = mtcars, family = binomial)
+cat("glm (logistic):\n")
+tula(m_glm)
+
+# multinom equivalent
+m_mn <- multinom(factor(am) ~ wt + hp, data = mtcars, trace = FALSE)
+cat("\nmultinom (binary):\n")
+tula(m_mn)
+```
