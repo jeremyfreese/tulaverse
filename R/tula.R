@@ -21,17 +21,34 @@
 #' @param label Logical. If `TRUE` (the default), value labels are used for
 #'   factor levels when available (e.g. from `haven`-labelled variables).
 #'   If `FALSE`, raw level values are always used.
-#' @param width Integer. Maximum total character width of the output.
+#' @param width Integer or `Inf`. Maximum total character width of the output.
 #'   Defaults to `getOption("width")` (typically 80 in an interactive R
 #'   session, but respects whatever the user has set). When the natural width
 #'   of the table or header would exceed this value, the label column is
 #'   narrowed and long labels are truncated with a trailing `~`. Set to `Inf`
 #'   to allow unlimited width.
+#' @param sep Integer. For summarize output: number of variables between each
+#'   horizontal separator line. Default 5. Set to 0 to suppress separators.
+#'   Separators never split a factor variable's level rows; if a sep boundary
+#'   falls inside a factor block, the separator is placed after the block.
+#'   Ignored for regression output.
+#' @param mad Logical. For summarize output: if `TRUE`, show the mean absolute
+#'   deviation (MAD) instead of the standard deviation. Column header changes
+#'   to `"MAD"`. Ignored for regression output.
+#' @param median Logical. For summarize output: if `TRUE`, show the median
+#'   instead of the mean and the IQR instead of SD/MAD. Column headers change
+#'   to `"Median"` and `"IQR"`. Factor variable display is unchanged.
+#'   Ignored for regression output.
+#' @param digits Integer. For summarize output: number of significant digits
+#'   used when formatting numeric values (mean, SD/MAD/IQR, min, max).
+#'   Default 7, which avoids scientific notation for numbers up to 9,999,999.
+#'   Ignored for regression output (which always uses 4 significant digits).
 #' @param ... Additional arguments passed to model-specific methods (reserved
 #'   for future extensions).
 #'
-#' @return Invisibly returns a `tula_output` object (an S3 list). The primary
-#'   side effect is printing to the console.
+#' @return For regression models, invisibly returns a `tula_output` object.
+#'   For data frames and vectors, invisibly returns a `tula_summary` object.
+#'   The primary side effect is printing to the console.
 #'
 #' @examples
 #' m <- lm(mpg ~ cyl + wt, data = mtcars)
@@ -42,22 +59,58 @@
 #' m2 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
 #' tula(m2)
 #'
+#' tula(mtcars)
+#' tula(mtcars, sep = 3, median = TRUE)
+#'
 #' @export
 tula <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
-                 width = NULL, ...) {
+                 width = NULL, sep = 5L, mad = FALSE, median = FALSE,
+                 digits = 7L, ...) {
+  # Capture the expression used for `model` before dispatch, so that vector
+  # methods can display a meaningful variable name (e.g. "mtcars$mpg").
+  .tula_call_nm <- deparse(substitute(model))
   UseMethod("tula")
 }
 
 #' @rdname tula
 #' @export
 tula.default <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
-                         width = NULL, ...) {
+                         width = NULL, sep = 5L, mad = FALSE, median = FALSE,
+                         digits = 7L, ...) {
+  # Atomic vectors (numeric, integer, logical, character, factor) are routed
+  # to the summarize path.  Matrices and other dimensioned objects are not
+  # supported.
+  if (is.atomic(model) && is.null(dim(model))) {
+    # Recover the expression the user typed for `model` from the generic's
+    # call frame (UseMethod passes the generic's environment to the method).
+    nm <- tryCatch({
+      # sys.function(0) is the current method; sys.call(-1) is the generic call
+      mc  <- sys.call(-1L)        # call to tula() (the generic)
+      gfn <- sys.function(-1L)    # the generic function itself
+      deparse(match.call(gfn, mc)$model)
+    }, error = function(e) "x")
+    df <- stats::setNames(list(model), nm)
+    # Preserve factor class through as.data.frame
+    df <- as.data.frame(df, stringsAsFactors = FALSE)
+    if (is.factor(model)) df[[nm]] <- model
+    return(.tula_summarize(df, width = width, sep = sep,
+                           mad = mad, median = median, digits = digits))
+  }
   stop(
     "tula() does not support objects of class '",
     paste(class(model), collapse = "', '"),
-    "'.\nSupported classes: lm, glm.",
+    "'.\nSupported classes: lm, glm, data.frame, and atomic vectors.",
     call. = FALSE
   )
+}
+
+#' @rdname tula
+#' @export
+tula.data.frame <- function(model, wide = FALSE, ref = FALSE, label = TRUE,
+                             width = NULL, sep = 5L, mad = FALSE,
+                             median = FALSE, digits = 7L, ...) {
+  .tula_summarize(model, width = width, sep = sep, mad = mad, median = median,
+                  digits = digits)
 }
 
 
