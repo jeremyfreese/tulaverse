@@ -352,14 +352,57 @@ tula(m20, ref = TRUE, wide = TRUE)
 
 ---
 
-## Test 21 — `ref = TRUE` alignment check (wide mode, long label)
+## Test 21 — `ref = TRUE` with long factor level labels (truncation check)
 
-**Expected:** All rows — including the `(base)` row and factor header rows —
-are exactly the same width as the separator lines in wide mode.
+**Expected:** Factor level labels long enough to require truncation (`~`) in
+the label column. The base-category row (estimate = 0, rest blank) should
+truncate cleanly alongside the other rows, and all rows — including the base
+row — must be exactly the same width as the separator lines. Run in both
+narrow (default) and wide modes.
 
 ```{r test21}
-m21 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+df21 <- mtcars
+df21$engine_type <- factor(
+  mtcars$cyl,
+  levels = c(4, 6, 8),
+  labels = c("Four-cylinder inline engine",
+             "Six-cylinder inline engine",
+             "Eight-cylinder V-type engine")
+)
+m21 <- lm(mpg ~ wt + engine_type, data = df21)
+cat("Narrow (ref = TRUE):\n")
+tula(m21, ref = TRUE)
+cat("\nWide (ref = TRUE):\n")
 tula(m21, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 21b — binary factor collapse (level name = variable name)
+
+**Expected:** When a binary factor's non-reference level label matches the
+variable name (case-insensitively), the group-header row is suppressed and the
+coefficient prints directly on the variable name row (no indentation).
+`male` should appear once, not as a header + indented row.
+
+Three checks: (1) collapse fires; (2) collapse suppressed when label differs
+from name (`treated` ≠ `treatment`); (3) collapse suppressed when `ref = TRUE`
+because the ref row makes a second row.
+
+```{r test21b}
+df21b <- mtcars
+# "male": non-ref level name matches variable name → should collapse
+df21b$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
+                     levels = c("female", "male"))
+# "treatment": non-ref level name does NOT match variable name → no collapse
+df21b$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
+                          levels = c("control", "treated"))
+m21b <- lm(mpg ~ wt + male + treatment, data = df21b)
+
+cat("Default (ref = FALSE) — 'male' collapses, 'treatment' does not:\n")
+tula(m21b)
+cat("\nref = TRUE — 'male' has 2 rows (no collapse):\n")
+tula(m21b, ref = TRUE)
 ```
 
 ---
@@ -644,4 +687,110 @@ tryCatch(
   tula(list(x = 1, y = 2)),
   error = function(e) cat("Error caught as expected:\n", conditionMessage(e), "\n")
 )
+```
+
+---
+
+# polr / ordered regression (MASS)
+
+```{r polr-setup}
+library(MASS)
+mtcars$gear_ord <- factor(mtcars$gear, ordered = TRUE)   # 3 levels → 2 cutpoints
+```
+
+## Test 39 — polr: basic numeric predictors
+
+**Expected:** `Ordered regression / Link: logistic` family label above header.
+Header left: AIC, BIC, Log likelihood. Header right: N, McFadden R-sq.
+Predictor rows use `z` / `P>|z|`. Cutpoints (`3|4`, `4|5`) appear after an
+extra separator, with Coef. and Std. Err. populated but `z` and `P>|z|` blank.
+
+```{r test39}
+m39 <- polr(gear_ord ~ mpg + wt, data = mtcars, Hess = TRUE)
+cat("Narrow:\n")
+tula(m39, width = 72)
+cat("\nWide (CIs on both predictors and cutpoints):\n")
+tula(m39, wide = TRUE, width = 100)
+```
+
+---
+
+## Test 40 — polr: factor predictor, factor grouping + cutpoints
+
+**Expected:** Stata-style factor group header (`cyl`) with indented levels
+in the predictor section, *and* cutpoints in the lower section. The two
+sections must be cleanly separated.
+
+```{r test40}
+m40 <- polr(gear_ord ~ mpg + factor(cyl), data = mtcars, Hess = TRUE)
+cat("Narrow:\n")
+tula(m40, width = 72)
+cat("\nref = TRUE:\n")
+tula(m40, ref = TRUE, width = 72)
+```
+
+---
+
+## Test 41 — polr: exp = TRUE (odds ratios, cutpoints unaffected)
+
+**Expected:** Predictor rows show `exp(b)` / `DMSE`; column headers change.
+Cutpoint rows are **not** exponentiated — they show raw values as before
+(cutpoints are threshold parameters, not log-odds). A note about CIs being
+suppressed should appear.
+
+```{r test41}
+cat("exp = TRUE:\n")
+tula(m40, exp = TRUE, width = 72)
+cat("\nexp = TRUE, wide = FALSE (no message):\n")
+tula(m40, exp = TRUE, wide = FALSE, width = 72)
+```
+
+---
+
+## Test 42 — polr: four-level outcome (three cutpoints)
+
+**Expected:** Three cutpoint rows (`XS|S`, `S|M`, `M|L`) in the lower section.
+
+```{r test42}
+iris4 <- iris
+iris4$size <- cut(iris$Sepal.Length,
+                  breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
+                  labels = c("XS", "S", "M", "L"),
+                  include.lowest = TRUE,
+                  ordered_result = TRUE)
+m42 <- polr(size ~ Sepal.Width + Petal.Length + Species, data = iris4, Hess = TRUE)
+tula(m42, width = 72)
+```
+
+---
+
+## Test 43 — polr: probit link
+
+**Expected:** Family label reads `Ordered regression / Link: probit`.
+Output structure identical to logistic; only coefficient values differ.
+
+```{r test43}
+m43 <- polr(gear_ord ~ mpg + wt, data = mtcars, method = "probit", Hess = TRUE)
+tula(m43, width = 72)
+```
+
+---
+
+## Test 44 — clm (ordinal package, if installed)
+
+**Expected:** Output structurally identical to the matching `polr` model.
+Family label reads `Ordered regression / Link: logit`. Coefficients should
+agree closely with Test 40 (minor differences from optimiser tolerance).
+
+```{r test44}
+if (requireNamespace("ordinal", quietly = TRUE)) {
+  library(ordinal)
+  mc44 <- clm(gear_ord ~ mpg + factor(cyl), data = mtcars)
+  cat("clm (ordinal):\n")
+  tula(mc44, width = 72)
+  cat("\npolr (MASS) — same model for comparison:\n")
+  tula(m40, width = 72)
+} else {
+  cat("ordinal package not installed — clm test skipped.\n")
+}
 ```

@@ -33,6 +33,8 @@ tula.lm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   opts    <- .parse_tula_opts(ref, label)
   coef_df <- build_coef_df(model, ct, ci, wide, ref = opts$ref, label = opts$label)
 
+  dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
+
   new_tula_output(
     model_type   = "lm",
     header_left  = header_left,
@@ -43,6 +45,7 @@ tula.lm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     family_label = NULL,
     width        = width,
     value_fmts   = c(AIC = "f3", BIC = "f3"),
-    exp          = exp
+    exp          = exp,
+    dep_var      = dep_var
   )
 }

@@ -53,10 +53,21 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
   # unavailable or returns a non-standard structure.
   if (is.null(assign_vec) || is.null(term_labels)) {
     mm          <- tryCatch(model.matrix(model), error = function(e) NULL)
-    assign_vec  <- if (!is.null(mm)) attr(mm, "assign") else
-                   rep(seq_along(coef_names) - 1L, 1L)  # fallback: 0,1,2,...
+    assign_vec  <- if (!is.null(mm)) {
+      av <- attr(mm, "assign")
+      if (!is.null(av)) av else rep(seq_along(coef_names) - 1L, 1L)
+    } else {
+      rep(seq_along(coef_names) - 1L, 1L)  # fallback: 0,1,2,...
+    }
     term_labels <- if (!is.null(mm))
       attr(terms(model), "term.labels") else character(0)
+  }
+
+  # Final safety guard: if assign_vec is still NULL (model.matrix did not set
+  # the assign attribute and no fallback caught it), use sequential non-zero
+  # indices so the loop never sees a NULL subscript.
+  if (is.null(assign_vec)) {
+    assign_vec <- seq_along(coef_names)   # 1, 2, 3, ... — no intercept row
   }
 
   if (is.null(data_classes)) {
@@ -164,16 +175,29 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     if (is_fac) {
       bare_nm <- strip_fn_wrapper(term_nm)
 
-      # Emit a group header row the first time we see this factor term.
-      if (is.null(last_factor_term) || last_factor_term != term_nm) {
-        rows[[length(rows) + 1L]] <- .make_header_row(bare_nm)
-        last_factor_term <- term_nm
-      }
-
       # Level label = coefficient name minus the original term name prefix
       level_suffix  <- substring(nm, nchar(term_nm) + 1L)
       level_display <- resolve_level_label(level_suffix, bare_nm, term_nm)
-      lbl           <- paste0("  ", level_display)
+
+      # Collapse condition: suppress the separate group-header row and use the
+      # bare variable name directly on the coefficient row when ALL of:
+      #   1. ref = FALSE  (with ref=TRUE a binary factor produces 2 rows, not 1)
+      #   2. the factor has exactly 2 levels (so only 1 non-reference row prints)
+      #   3. the non-reference level label matches the bare variable name
+      #      (case-insensitive) — the typical "male"/"male" redundancy pattern
+      xlvls      <- xlevels[[term_nm]]
+      collapsing <- !isTRUE(ref) &&
+                    !is.null(xlvls) && length(xlvls) == 2L &&
+                    tolower(trimws(level_display)) == tolower(bare_nm)
+
+      # Emit a group header row the first time we see this factor term,
+      # unless we are collapsing into a single row.
+      if (is.null(last_factor_term) || last_factor_term != term_nm) {
+        if (!collapsing) rows[[length(rows) + 1L]] <- .make_header_row(bare_nm)
+        last_factor_term <- term_nm
+      }
+
+      lbl <- if (collapsing) bare_nm else paste0("  ", level_display)
     } else {
       last_factor_term <- NULL
       lbl              <- gsub(":", "*", nm, fixed = TRUE)
@@ -200,7 +224,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
         # Emit reference level row (reference = xlevels[[term_nm]][1])
         ref_level_raw     <- xlevels[[term_nm]][1L]
         ref_level_display <- resolve_level_label(ref_level_raw, bare_nm, term_nm)
-        ref_lbl           <- paste0("  ", ref_level_display, " (base)")
+        ref_lbl           <- paste0("  ", ref_level_display)
         rows[[length(rows) + 1L]] <- .make_ref_row(ref_lbl)
       }
     }
@@ -230,6 +254,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     is_factor_header = TRUE,
     is_intercept     = FALSE,
     is_ref           = FALSE,
+    is_cutpoint      = FALSE,
     estimate         = NA_real_,
     std_err          = NA_real_,
     statistic        = NA_real_,
@@ -247,6 +272,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     is_factor_header = FALSE,
     is_intercept     = is_intercept,
     is_ref           = FALSE,
+    is_cutpoint      = FALSE,
     estimate         = ct[i, 1L],
     std_err          = ct[i, 2L],
     statistic        = ct[i, 3L],
@@ -264,6 +290,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     is_factor_header = FALSE,
     is_intercept     = FALSE,
     is_ref           = TRUE,
+    is_cutpoint      = FALSE,
     estimate         = 0,
     std_err          = NA_real_,
     statistic        = NA_real_,
@@ -272,6 +299,44 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     ci_upper         = NA_real_,
     stringsAsFactors = FALSE
   )
+}
+
+# Internal: create a single cutpoint (threshold) row.
+# Cutpoints show estimate and SE but not z or p-value (Stata convention).
+.make_cutpoint_row <- function(label, estimate, std_err, ci_lower, ci_upper) {
+  data.frame(
+    label            = label,
+    is_factor_header = FALSE,
+    is_intercept     = FALSE,
+    is_ref           = FALSE,
+    is_cutpoint      = TRUE,
+    estimate         = estimate,
+    std_err          = std_err,
+    statistic        = NA_real_,   # blank in output (Stata convention)
+    p_value          = NA_real_,   # blank in output (Stata convention)
+    ci_lower         = ci_lower,
+    ci_upper         = ci_upper,
+    stringsAsFactors = FALSE
+  )
+}
+
+# Internal: build a data frame of cutpoint rows from the cutpoint portion of
+# the summary coefficient matrix and (optionally) the CI matrix.
+#
+# ct_zeta: matrix with at least 2 cols [estimate, SE]; rownames = cutpoint names
+# ci_zeta: 2-column CI matrix (rownames match ct_zeta), or NULL
+.build_cutpoint_rows <- function(ct_zeta, ci_zeta) {
+  rows <- lapply(seq_len(nrow(ct_zeta)), function(i) {
+    nm <- rownames(ct_zeta)[i]
+    .make_cutpoint_row(
+      label    = nm,
+      estimate = ct_zeta[i, 1L],
+      std_err  = ct_zeta[i, 2L],
+      ci_lower = if (!is.null(ci_zeta)) ci_zeta[nm, 1L] else NA_real_,
+      ci_upper = if (!is.null(ci_zeta)) ci_zeta[nm, 2L] else NA_real_
+    )
+  })
+  do.call(rbind, rows)
 }
 
 # Null-coalescing operator (avoid importing rlang)
@@ -532,8 +597,18 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 
   lines <- c(sep, hdr, sep)
 
+  cutpoint_sep_done <- FALSE
+
   for (i in seq_len(nrow(coef_df))) {
     row <- coef_df[i, ]
+
+    is_cp <- !is.null(row$is_cutpoint) && isTRUE(row$is_cutpoint)
+
+    # Insert a separator before the first cutpoint row (Stata layout)
+    if (is_cp && !cutpoint_sep_done) {
+      lines <- c(lines, sep)
+      cutpoint_sep_done <- TRUE
+    }
 
     # Truncate label if needed
     lbl     <- row$label
@@ -577,9 +652,11 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 
     } else {
       # When exp = TRUE, exponentiate estimate and compute delta-method SE.
-      # The test statistic and p-value are unchanged.
-      est_display <- if (exp) exp(row$estimate) else row$estimate
-      se_display  <- if (exp) exp(row$estimate) * row$std_err else row$std_err
+      # Cutpoint rows are never exponentiated (they are threshold parameters,
+      # not log-odds coefficients).
+      # The test statistic and p-value are unchanged for all rows.
+      est_display <- if (exp && !is_cp) exp(row$estimate) else row$estimate
+      se_display  <- if (exp && !is_cp) exp(row$estimate) * row$std_err else row$std_err
 
       if (wide) {
         line <- sprintf(

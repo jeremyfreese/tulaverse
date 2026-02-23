@@ -61,6 +61,8 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   stat_col_nm <- colnames(ct)[3L]
   stat_label  <- if (grepl("^z", stat_col_nm, ignore.case = TRUE)) "z" else "t"
 
+  dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
+
   new_tula_output(
     model_type   = "glm",
     header_left  = header_left,
@@ -71,6 +73,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     family_label = family_label,
     width        = width,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
-    exp          = exp
+    exp          = exp,
+    dep_var      = dep_var
   )
 }

@@ -147,7 +147,8 @@ new_tula_output <- function(model_type,
                             family_label = NULL,
                             width        = NULL,
                             value_fmts   = character(0L),
-                            exp          = FALSE) {
+                            exp          = FALSE,
+                            dep_var      = NULL) {
   structure(
     list(
       model_type   = model_type,
@@ -159,7 +160,8 @@ new_tula_output <- function(model_type,
       family_label = family_label,
       width        = width,
       value_fmts   = value_fmts,
-      exp          = exp
+      exp          = exp,
+      dep_var      = dep_var
     ),
     class = "tula_output"
   )
@@ -363,6 +365,19 @@ print.tula_output <- function(x, ...) {
   table_lines <- format_coef_table(x$coef_df, x$stat_label, x$wide,
                                    total_width = total_width,
                                    exp = isTRUE(x$exp))
+
+  # Embed the dependent variable name in the label-column area of the column
+  # header row (table_lines[2]), mirroring the multinom outcome-label pattern.
+  if (!is.null(x$dep_var) && nchar(x$dep_var) > 0L) {
+    num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L
+    if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
+    lbl_w   <- total_width - num_cols_w
+    dep_lbl <- .truncate_label(x$dep_var, lbl_w)
+    hdr_line        <- table_lines[2L]
+    table_lines[2L] <- paste0(pad_right(dep_lbl, lbl_w),
+                              substring(hdr_line, lbl_w + 1L))
+  }
+
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
 
   invisible(x)
