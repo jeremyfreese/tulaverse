@@ -409,6 +409,43 @@ tula(m27, exp = TRUE, ref = TRUE)
 
 ---
 
+# `level` — confidence interval width
+
+## Test 30a — `level`: 90% vs 95% vs 99% (lm)
+
+**Expected:** CI bounds narrow as level decreases and widen as it increases.
+Column header updates to match: `[90% Conf`, `[95% Conf`, `[99% Conf`.
+Point estimates, SEs, t-statistics, and p-values are identical across all three.
+
+```{r test30a}
+m30a <- lm(mpg ~ cyl + wt, data = mtcars)
+cat("level = 90:\n")
+tula(m30a, wide = TRUE, level = 90)
+cat("\nlevel = 95 (default):\n")
+tula(m30a, wide = TRUE)
+cat("\nlevel = 99:\n")
+tula(m30a, wide = TRUE, level = 99)
+```
+
+---
+
+## Test 30b — `level`: proportion input and error handling
+
+**Expected:** `level = 0.90` is treated the same as `level = 90` (auto-multiplied
+by 100). `level = 40` produces an informative error.
+
+```{r test30b}
+cat("level = 0.90 (same as 90):\n")
+tula(m30a, wide = TRUE, level = 0.90)
+cat("\nlevel = 40 (should error):\n")
+tryCatch(
+  tula(m30a, wide = TRUE, level = 40),
+  error = function(e) cat("Error caught:", conditionMessage(e), "\n")
+)
+```
+
+---
+
 # `wide` / `width` options
 
 ## Test 30 — `exp = TRUE` with `wide = TRUE` (message + suppression)
@@ -627,4 +664,87 @@ if (requireNamespace("ordinal", quietly = TRUE)) {
 } else {
   cat("ordinal package not installed — clm test skipped.\n")
 }
+```
+
+---
+
+# Negative binomial (`MASS::glm.nb`)
+
+## Test 45 — negbin: basic numeric predictors
+
+**Expected:** Family label `"Family: Negative Binomial / Link: log"`.
+Header: AIC, BIC, Log likelihood (left), Number of obs, McFadden R-sq (right).
+Coefficient table with `z` / `P>|z|`. Ancillary section at bottom with
+`/lnalpha` and `alpha` rows, each preceded by a separator, with blank z and p
+columns.
+
+```{r test45}
+m45 <- glm.nb(carb ~ wt + hp, data = mtcars)
+cat("Narrow:\n")
+tula(m45)
+cat("\nWide (CIs on coefficients and ancillary):\n")
+tula(m45, wide = TRUE)
+```
+
+---
+
+## Test 46 — negbin: factor predictor
+
+**Expected:** `cyl` appears as a grouped factor header with indented levels
+`6` and `8` in the coefficient section. Ancillary section unchanged.
+
+```{r test46}
+m46 <- glm.nb(carb ~ wt + factor(cyl), data = mtcars)
+cat("Narrow:\n")
+tula(m46)
+cat("\nref = TRUE:\n")
+tula(m46, ref = TRUE)
+cat("\nref = TRUE, wide = TRUE:\n")
+tula(m46, ref = TRUE, wide = TRUE)
+```
+
+---
+
+## Test 47 — negbin: exp = TRUE (IRR)
+
+**Expected:** Column header reads `"IRR"` (not `"exp(b)"`). SE column reads
+`"DMSE"`. Coefficients are exponentiated. Reference rows (if shown) display
+`1`. Ancillary section (`/lnalpha` and `alpha`) is NOT exponentiated — same
+values as without `exp`. Message about CIs being suppressed.
+
+```{r test47}
+cat("exp = TRUE, ref = TRUE:\n")
+tula(m46, exp = TRUE, ref = TRUE)
+cat("\nexp = TRUE, wide = FALSE (no message):\n")
+tula(m46, exp = TRUE, wide = FALSE)
+```
+
+---
+
+## Test 48 — negbin: width constraints
+
+**Expected:** Long variable names are truncated with `~`. All rows (including
+ancillary) have the same total width.
+
+```{r test48}
+df48 <- mtcars
+df48$very_long_variable_name <- mtcars$hp
+m48 <- glm.nb(carb ~ wt + very_long_variable_name + factor(cyl), data = df48)
+tula(m48, width = 68)
+```
+
+---
+
+## Test 49 — negbin vs Poisson comparison
+
+**Expected:** Coefficient signs and rough magnitudes should be similar between
+NB and Poisson on the same data. The NB model has an ancillary section; the
+Poisson does not.
+
+```{r test49}
+cat("Negative binomial:\n")
+tula(m45)
+cat("\nPoisson:\n")
+m_pois <- glm(carb ~ wt + hp, data = mtcars, family = poisson)
+tula(m_pois)
 ```
