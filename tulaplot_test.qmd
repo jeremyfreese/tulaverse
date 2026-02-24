@@ -1,0 +1,99 @@
+---
+title: "tulaplot() visual tests"
+format: html
+---
+
+```{r setup}
+devtools::load_all(".")
+library(ggplot2)
+```
+
+## 1. Basic scatterplot — verify background, grid, axis lines, text sizes
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(title = "Weight vs MPG", subtitle = "Basic tulaplot test",
+       x = "Weight (1000 lbs)", y = "Miles per gallon")
+```
+
+## 2. Color scale — `scale_color_tula()` with Stata 18 stcolor palette
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point(size = 3) +
+  scale_color_tula() +
+  labs(title = "Colored by cylinders", color = "Cylinders")
+```
+
+## 3. Fill scale — `scale_fill_tula()` with bar chart
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), fill = factor(gear))) +
+  geom_bar(position = "dodge") +
+  scale_fill_tula() +
+  labs(title = "Cylinders by gear count", x = "Cylinders", fill = "Gears")
+```
+
+## 4. Faceted plot — verify strip background and text
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  facet_wrap(~ cyl) +
+  labs(title = "Faceted by cylinders")
+```
+
+## 5. Standalone `theme_tula()` — should look identical to tulaplot()
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  theme_tula() +
+  labs(title = "Using theme_tula() standalone")
+```
+
+## 6. Custom `base_size = 18` — verify proportional scaling
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg), base_size = 18) +
+  geom_point() +
+  labs(title = "Larger base size (18pt)")
+```
+
+## 7. 15+ levels — verify recycling warning
+
+```{r}
+df16 <- data.frame(
+  x = 1:16, y = 1:16,
+  grp = factor(paste0("G", sprintf("%02d", 1:16)))
+)
+tulaplot(df16, aes(x = x, y = y, color = grp)) +
+  geom_point(size = 4) +
+  scale_color_tula() +
+  labs(title = "16 levels: should warn about recycling")
+```
+
+## 8. User override — confirm silent override (no warning messages)
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  theme(panel.background = element_rect(fill = "lightyellow")) +
+  labs(title = "User override: lightyellow background (no warnings)")
+```
+
+## 9. All 15 palette colors displayed
+
+```{r}
+df15 <- data.frame(
+  x = 1:15, y = rep(1, 15),
+  color = factor(1:15, levels = 1:15)
+)
+tulaplot(df15, aes(x = color, y = y, fill = color)) +
+  geom_col(width = 0.8) +
+  scale_fill_tula() +
+  theme(legend.position = "none") +
+  labs(title = "All 15 Stata 18 stcolor palette colors",
+       x = "stc1 through stc15", y = "")
+```
