@@ -1,7 +1,7 @@
 #' @rdname tula
 #' @export
 tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                          width = NULL, exp = FALSE, ...) {
+                          width = NULL, exp = FALSE, parallel = FALSE, ...) {
   # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
   if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
     message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
@@ -114,6 +114,8 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     list(outcome = lv, coef_df = coef_df)
   })
 
+  dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
+
   new_tula_multinom_output(
     header_left  = header_left,
     header_right = header_right,
@@ -123,6 +125,191 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     wide         = wide,
     width        = width,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
-    exp          = exp
+    exp          = exp,
+    parallel     = isTRUE(parallel),
+    dep_var      = dep_var
   )
+}
+
+
+# ---------------------------------------------------------------------------
+# Internal: compute the number-zone width (nz_w) for the parallel table.
+#
+# Scans all formatted coefficient and SE values across all outcome blocks and
+# returns the minimum number-zone width that can hold every value without
+# overflow.  The result is at least 7 (wide enough for typical "-1.234" values).
+#
+# Used by both print.tula_multinom_output (to set total_width correctly) and
+# .format_parallel_multinom_table (to format cells).
+# ---------------------------------------------------------------------------
+.parallel_nz_w <- function(blocks, exp = FALSE) {
+  max_w   <- 7L
+  base_df <- blocks[[1L]]$coef_df
+  for (i in seq_len(nrow(base_df))) {
+    if (isTRUE(base_df[i, "is_factor_header"])) next
+    for (b in blocks) {
+      r <- b$coef_df[i, ]
+      if (isTRUE(r$is_ref)) next
+      est    <- if (isTRUE(exp)) base::exp(r$estimate) else r$estimate
+      se_val <- if (isTRUE(exp)) base::exp(r$estimate) * r$std_err else r$std_err
+      coef_w <- nchar(trimws(fmt_num(est,    width = 1L)))
+      # SE string "(x.xxx)" occupies nz_w+1 chars; need nz_w >= nchar(se_str) - 1
+      se_w   <- nchar(trimws(fmt_num(se_val, width = 1L))) + 2L  # +2 for parens
+      max_w  <- max(max_w, coef_w, se_w - 1L)
+    }
+  }
+  max_w
+}
+
+
+# ---------------------------------------------------------------------------
+# Internal: render a parallel (side-by-side) table for multinom output.
+#
+# Each non-base outcome gets one column. Within each row:
+#   - Coefficient row: label | est1*  est2** est3   (stars appended, right-aligned)
+#   - SE row:          blank | (se1)  (se2)  (se3)  (right-aligned)
+# Factor group-header rows take one line with no numeric content.
+# Intercept rows go last (as ordered by coef_df).
+#
+# exp = TRUE: estimates shown as exp(b), SEs as delta-method exp(b)*SE(b).
+#             Reference rows show "1" instead of "0".
+#
+# Returns a character vector (one element per output line), NOT including
+# the "Base outcome:" footer or the star legend — those are printed by the
+# caller (print.tula_multinom_output).
+# ---------------------------------------------------------------------------
+.format_parallel_multinom_table <- function(blocks, dep_var, total_width,
+                                            exp = FALSE) {
+  outcomes <- vapply(blocks, `[[`, character(1L), "outcome")
+  n_out    <- length(outcomes)
+
+  # Column layout (per outcome column):
+  #
+  #   [  nz_w chars: number right-aligned  ][  star_w chars: stars left-aligned  ]
+  #
+  # nz_w is dynamic: it equals the widest formatted number across all cells
+  # (minimum 7).  This prevents scientific-notation values (e.g. 9.036e-39)
+  # from overflowing the number zone.  star_w is always 3.
+  #
+  # Alignment: the rightmost digit of the coefficient (at position nz_w) lines
+  # up with the rightmost digit of the SE "(x.xxx)" on the row below.  The ")"
+  # lands at position nz_w+1, leaving star_w-1 trailing spaces.
+
+  star_w  <- 3L
+  col_gap <- 2L
+  pipe_w  <- 2L
+
+  # nz_w: dynamic number-zone width (via .parallel_nz_w helper).
+  nz_w    <- .parallel_nz_w(blocks, exp)
+  cw_col  <- nz_w + star_w
+  base_df <- blocks[[1L]]$coef_df
+
+  # num_w: total width of the numeric section (pipe + all columns + gaps)
+  num_w <- pipe_w + n_out * cw_col + (n_out - 1L) * col_gap
+
+  # available_lbl_w: maximum label column width that fits within total_width.
+  # If even this is below the minimum, the table can't be rendered.
+  available_lbl_w <- total_width - num_w
+  min_lbl_w <- 8L
+  if (available_lbl_w < min_lbl_w) {
+    stop(
+      "tula(): parallel = TRUE requires more width than width = ", total_width,
+      " provides for ", n_out, " outcome categories. ",
+      "Try a larger width argument or use parallel = FALSE.",
+      call. = FALSE
+    )
+  }
+
+  # lbl_w: set from actual label content rather than total_width, so that
+  # excess width (driven by the header block) appears as trailing whitespace
+  # to the RIGHT of the coefficient columns, not as empty space between labels
+  # and the "|" separator.  Cap at available_lbl_w (truncates labels if needed).
+  all_labels      <- base_df$label
+  dep_lbl_len     <- if (!is.null(dep_var)) nchar(dep_var) else 0L
+  natural_lbl_w   <- max(nchar(all_labels), dep_lbl_len, 1L, na.rm = TRUE)
+  lbl_w           <- min(natural_lbl_w, available_lbl_w)
+
+  sep <- char_rep("-", total_width)
+
+  # --- helpers ---------------------------------------------------------------
+
+  stars_for <- function(p) {
+    if (is.na(p)) return("")
+    if (p < 0.001) return("***")
+    if (p < 0.01)  return("**")
+    if (p < 0.05)  return("*")
+    ""
+  }
+
+  # Format one cell on the coefficient line.
+  # Layout: [  nz_w chars: number right-aligned  ][  star_w chars: stars left-aligned  ]
+  # Rightmost digit of the number lands at position nz_w, matching the SE alignment.
+  fmt_coef_cell <- function(r) {
+    if (isTRUE(r$is_ref))
+      return(paste0(pad_left(if (exp) "1" else "0", nz_w), strrep(" ", star_w)))
+    est <- if (isTRUE(exp)) base::exp(r$estimate) else r$estimate
+    st  <- stars_for(r$p_value)
+    # trimws(fmt_num(..., width=1)) gives the number string without padding
+    num <- trimws(fmt_num(est, width = 1L))
+    paste0(pad_left(num, nz_w), pad_right(st, star_w))
+  }
+
+  # Format one cell on the SE line.
+  # Layout: [  nz_w+1 chars: "(se)" right-aligned  ][  star_w-1 spaces  ]
+  # The closing ")" lands at position nz_w+1, one past the last digit — aligning
+  # the last digit of the SE with the last digit of the coefficient above it.
+  fmt_se_cell <- function(r) {
+    if (isTRUE(r$is_ref)) return(strrep(" ", cw_col))
+    se_val <- if (isTRUE(exp)) base::exp(r$estimate) * r$std_err else r$std_err
+    se_str <- paste0("(", trimws(fmt_num(se_val, width = 1L)), ")")
+    paste0(pad_left(se_str, nz_w + 1L), strrep(" ", star_w - 1L))
+  }
+
+  # --- column header line ----------------------------------------------------
+  # Outcome names are right-aligned in the number zone (nz_w), followed by
+  # star_w spaces — so the last character of the name lines up with the last
+  # digit of the coefficients below it.
+  dep_lbl  <- if (!is.null(dep_var)) .truncate_label(dep_var, lbl_w) else ""
+  col_hdrs <- vapply(outcomes,
+                     function(o) paste0(pad_left(.truncate_label(o, nz_w), nz_w),
+                                        strrep(" ", star_w)),
+                     character(1L))
+  hdr_line <- paste0(pad_right(dep_lbl, lbl_w), " |",
+                     paste(col_hdrs, collapse = strrep(" ", col_gap)))
+
+  lines <- c(sep, hdr_line, sep)
+
+  # --- data rows -------------------------------------------------------------
+  # All blocks share identical row structure; iterate using the first block.
+  base_df <- blocks[[1L]]$coef_df
+
+  for (i in seq_len(nrow(base_df))) {
+    base_row <- base_df[i, ]
+    lbl_fmt  <- pad_right(.truncate_label(base_row$label, lbl_w), lbl_w)
+
+    if (isTRUE(base_row$is_factor_header)) {
+      # One line only: label + pipe + blanks across all outcome columns
+      lines <- c(lines, paste0(lbl_fmt, " |", strrep(" ", num_w - pipe_w)))
+      next
+    }
+
+    # Coefficient line
+    coef_cells <- vapply(blocks,
+                         function(b) fmt_coef_cell(b$coef_df[i, ]),
+                         character(1L))
+    lines <- c(lines,
+               paste0(lbl_fmt, " |",
+                      paste(coef_cells, collapse = strrep(" ", col_gap))))
+
+    # SE line (blank label area)
+    se_cells <- vapply(blocks,
+                       function(b) fmt_se_cell(b$coef_df[i, ]),
+                       character(1L))
+    lines <- c(lines,
+               paste0(pad_right("", lbl_w), " |",
+                      paste(se_cells, collapse = strrep(" ", col_gap))))
+  }
+
+  lines <- c(lines, sep)
+  lines
 }

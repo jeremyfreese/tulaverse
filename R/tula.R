@@ -73,7 +73,7 @@
 #' @export
 tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                 digits = 7L, exp = FALSE, ...) {
+                 digits = 7L, exp = FALSE, parallel = FALSE, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -221,7 +221,9 @@ new_tula_multinom_output <- function(header_left,
                                      wide       = FALSE,
                                      width      = NULL,
                                      value_fmts = character(0L),
-                                     exp        = FALSE) {
+                                     exp        = FALSE,
+                                     parallel   = FALSE,
+                                     dep_var    = NULL) {
   structure(
     list(
       header_left  = header_left,
@@ -232,7 +234,9 @@ new_tula_multinom_output <- function(header_left,
       wide         = wide,
       width        = width,
       value_fmts   = value_fmts,
-      exp          = exp
+      exp          = exp,
+      parallel     = parallel,
+      dep_var      = dep_var
     ),
     class = "tula_multinom_output"
   )
@@ -266,7 +270,22 @@ print.tula_multinom_output <- function(x, ...) {
     wide         = x$wide,
     value_fmts   = vf
   )
-  total_width <- min(natural_width, max_w)
+  # For parallel output, derive the label-column width the same way the
+  # stacked layout would (natural_width capped at max_w, minus the stacked
+  # numeric-column block), then set total_width = lbl_w + parallel numeric
+  # columns.  This keeps "|" at the same horizontal position as in any other
+  # tula output for the same model.  Cap at max_w if needed; the table
+  # function will error if lbl_w < 8.  For stacked, cap at natural_width.
+  if (isTRUE(x$parallel)) {
+    n_out_p            <- length(x$blocks)
+    cw_col_p           <- .parallel_nz_w(x$blocks, isTRUE(x$exp)) + 3L  # nz_w + star_w
+    stacked_num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L  # = 44
+    parallel_num_w     <- 2L + n_out_p * cw_col_p + (n_out_p - 1L) * 2L
+    lbl_w_natural      <- min(natural_width, max_w) - stacked_num_cols_w
+    total_width        <- min(lbl_w_natural + parallel_num_w, max_w)
+  } else {
+    total_width <- min(natural_width, max_w)
+  }
 
   sep_line <- char_rep("-", total_width)
 
@@ -276,51 +295,61 @@ print.tula_multinom_output <- function(x, ...) {
   if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
   lbl_w <- total_width - num_cols_w
 
-  # Shared header (printed once above all outcome blocks)
+  # Shared header (printed once above all outcome blocks / parallel table)
   header_lines <- format_header(x$header_left, x$header_right,
                                 total_width = total_width,
                                 value_fmts  = vf)
   cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
 
-  # One coefficient block per non-base outcome.
-  # format_coef_table() returns: [sep, hdr, sep, ...rows..., sep]
-  #
-  # Layout per block:
-  #   sep
-  #   <outcome label>  |  Coef.  Std. Err.  z  P>|z|  ...
-  #   sep
-  #   ...rows...
-  #   sep   <- serves as both block closer and next-block opener
-  #
-  # The outcome label is embedded in the label-column area of the column-
-  # header row (inner_lines[1]), replacing the blank padding. It is
-  # truncated with .truncate_label() so the | remains aligned.
-  for (i in seq_along(x$blocks)) {
-    blk <- x$blocks[[i]]
-    table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
-                                     total_width = total_width,
-                                     exp = isTRUE(x$exp))
-    # table_lines: [sep, hdr, sep, ...rows..., sep]
-    # Drop first sep — replaced by sep_line printed below.
-    # Drop last sep  — printed manually after the loop so we always get a
-    # final separator before the "Base outcome:" footer.
-    inner_lines <- table_lines[-c(1L, length(table_lines))]
+  if (isTRUE(x$parallel)) {
+    # --- Parallel layout: all non-base outcomes as side-by-side columns -----
+    # .format_parallel_multinom_table() raises an informative error if there
+    # are too many outcome categories to fit within total_width.
+    table_lines <- .format_parallel_multinom_table(
+      blocks      = x$blocks,
+      dep_var     = x$dep_var,
+      total_width = total_width,
+      exp         = isTRUE(x$exp)
+    )
+    cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
+    cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+    cat("* p<0.05  ** p<0.01  *** p<0.001\n")
 
-    # Embed the outcome label in the label-column area of the header row.
-    # inner_lines[1] is: "{lbl_w spaces} |  Coef.  Std. Err. ..."
-    # Replace the leading spaces with the (possibly truncated) outcome label.
-    outcome_lbl <- .truncate_label(blk$outcome, lbl_w)
-    hdr_line    <- inner_lines[1L]
-    inner_lines[1L] <- paste0(pad_right(outcome_lbl, lbl_w),
-                              substring(hdr_line, lbl_w + 1L))
+  } else {
+    # --- Stacked layout: one coefficient block per non-base outcome ----------
+    # format_coef_table() returns: [sep, hdr, sep, ...rows..., sep]
+    #
+    # Layout per block:
+    #   sep
+    #   <outcome label>  |  Coef.  Std. Err.  z  P>|z|  ...
+    #   sep
+    #   ...rows...
+    #   sep   <- serves as both block closer and next-block opener
+    #
+    # The outcome label is embedded in the label-column area of the column-
+    # header row (inner_lines[1]), replacing the blank padding.
+    for (i in seq_along(x$blocks)) {
+      blk <- x$blocks[[i]]
+      table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
+                                       total_width = total_width,
+                                       exp = isTRUE(x$exp))
+      # Drop first sep (replaced by sep_line below) and last sep (printed
+      # manually after the loop so there is always a final separator before
+      # the "Base outcome:" footer).
+      inner_lines <- table_lines[-c(1L, length(table_lines))]
 
+      # Embed the outcome label in the label-column area of the header row.
+      outcome_lbl <- .truncate_label(blk$outcome, lbl_w)
+      hdr_line    <- inner_lines[1L]
+      inner_lines[1L] <- paste0(pad_right(outcome_lbl, lbl_w),
+                                substring(hdr_line, lbl_w + 1L))
+
+      cat(sep_line, "\n", sep = "")
+      cat(paste(inner_lines, collapse = "\n"), "\n", sep = "")
+    }
     cat(sep_line, "\n", sep = "")
-    cat(paste(inner_lines, collapse = "\n"), "\n", sep = "")
+    cat("Base outcome: ", x$base_outcome, "\n", sep = "")
   }
-  cat(sep_line, "\n", sep = "")
-
-  # Base outcome footer
-  cat("Base outcome: ", x$base_outcome, "\n", sep = "")
 
   invisible(x)
 }

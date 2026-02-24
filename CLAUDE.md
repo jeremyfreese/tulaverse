@@ -396,3 +396,165 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 | `digits` | 7L | summarize | Significant digits (avoids sci notation to ~10M) |
 
 The summarize path also caps decimal places at 3 for `|x| > 0.1` via `.fmt_sum()`.
+
+---
+
+## tula_compare() — Design notes (NOT YET IMPLEMENTED)
+
+This section records design decisions made in conversation. Do not begin
+implementation until the user gives the go-ahead. All open questions must be
+resolved first.
+
+### What it does
+
+`tula_compare(m1, m2, ...)` prints a side-by-side comparison table of two or
+more regression models. Each predictor occupies two lines: the coefficient
+(with significance stars) on the first line, the standard error in parentheses
+on the second. The table is self-contained — it is a new rendering pipeline,
+not a variant of `format_coef_table()`.
+
+### Decided
+
+| # | Decision |
+|---|----------|
+| 1 | **Entry point — Option A: pre-dispatch interception inside `tula()`** — see detailed explanation below. `tula(m1)` continues to work exactly as before; `tula(m1, m2, m3)` triggers compare mode. No separate function is exported. |
+| 2 | **Layout** — stacked: coefficient (with stars) on row 1, SE in parentheses on row 2. One pair of rows per predictor. Factor group header rows take one line (no numeric content). Intercept goes last, as in single-model output. |
+| 3 | **Significance stars** — conventional cutoffs: `*` p<0.05, `**` p<0.01, `***` p<0.001. Star legend prints below the table. |
+| 4 | **Column headers** — model object names by default. A `labels` argument (character vector, same length as models) accepted from day one for override, defaulting to object names. |
+| 5 | **Binary-factor collapse** — the single-model collapse rule carries over, but only fires for a given variable if the collapse condition is met across **all** models being compared. |
+
+### Option A — How pre-dispatch interception works
+
+This is the central architectural decision. Read carefully before implementing.
+
+#### The problem with naïve multi-argument dispatch
+
+`tula()` uses `UseMethod("tula")`, which dispatches on the class of the
+**first argument only**. So `tula(m1, m2, m3)` would call `tula.lm(m1, m2, m3)`
+if `m1` is an `lm`. The extra models `m2`, `m3` arrive in `...` and are
+silently ignored or cause errors. S3 dispatch cannot natively handle
+"dispatch on the combination of arguments."
+
+#### The solution: intercept before UseMethod
+
+The body of `tula()` (the generic) runs **before** `UseMethod()` is called.
+This means we can inspect `...` and divert to a different code path before
+dispatch ever happens. The existing single-model path is completely untouched
+because `UseMethod()` is only reached when no extra models are found.
+
+#### Detailed implementation plan for `tula()`
+
+```r
+tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
+                 width = NULL, sep = 5L, mad = FALSE, median = FALSE,
+                 digits = 7L, exp = FALSE, labels = NULL, ...) {
+
+  .tula_call_nm <- deparse(substitute(model))
+
+  # --- Multi-model detection (compare mode) ---------------------------------
+  # Inspect unnamed elements of ... to see if any are regression model objects.
+  # Named elements (e.g. width = 80) are options, not models — skip them.
+  # A "regression model" is defined as: has a registered tula S3 method AND
+  # is not a data.frame/vector (those belong to the summarize path).
+  #
+  # .is_regression_model() returns TRUE for lm, glm, polr, clm, multinom, etc.
+  # It works by checking whether getS3method("tula", class(x)) exists.
+  # This is self-maintaining: any future model type registered via tula.XYZ()
+  # is automatically recognised here without changing this function.
+
+  dots      <- list(...)
+  dot_names <- names(dots)
+  unnamed   <- dots[is.null(dot_names) | !nzchar(dot_names)]
+
+  extra_models <- Filter(.is_regression_model, unnamed)
+  extra_other  <- Filter(Negate(.is_regression_model), unnamed)
+
+  # Error: mixing regression models with data frames / vectors is not allowed.
+  if (length(extra_models) > 0L && length(extra_other) > 0L) {
+    stop("tula(): cannot mix regression models with data frames or vectors. ",
+         "Call tula() separately for each.", call. = FALSE)
+  }
+
+  # If extra regression models found, divert to compare path.
+  if (length(extra_models) > 0L) {
+    all_models   <- c(list(model), extra_models)
+    model_labels <- if (!is.null(labels)) {
+      labels
+    } else {
+      # Capture the original expressions the user typed for ALL model arguments.
+      # substitute(list(...)) captures the unevaluated ... expressions;
+      # [-1] drops the "list" symbol; as.character() converts to strings.
+      mc   <- match.call(expand.dots = FALSE)
+      nms  <- c(deparse(mc$model),
+                as.character(as.list(mc$`...`)[is.null(dot_names) | !nzchar(dot_names)]))
+      nms[seq_along(all_models)]
+    }
+    return(.tula_compare_impl(all_models, model_labels,
+                              ref = ref, label = label,
+                              width = width, exp = exp))
+  }
+
+  # --- Single-model path (unchanged) ----------------------------------------
+  UseMethod("tula")
+}
+```
+
+#### The `.is_regression_model()` helper
+
+This internal function (defined in `tula.R`) is what distinguishes regression
+model objects from data frames and vectors:
+
+```r
+.is_regression_model <- function(x) {
+  # Must have a tula S3 method registered for its class...
+  has_method <- any(vapply(class(x), function(cl)
+    !is.null(getS3method("tula", cl, optional = TRUE)), logical(1L)))
+  # ...but must NOT be a data.frame or atomic vector (those use summarize path)
+  is_summarize_type <- is.data.frame(x) || (is.atomic(x) && is.null(dim(x)))
+  has_method && !is_summarize_type
+}
+```
+
+#### What the user sees
+
+```r
+tula(m1)              # single model — dispatches to tula.lm() as always
+tula(m1, m2, m3)      # compare mode — three models side by side
+tula(m1, m2, ref = TRUE)  # compare mode with named option — works fine
+tula(m1, width = 80)  # single model with option — "width" is named, no detection
+tula(m1, mydf)        # ERROR: mixing model with data frame not allowed
+```
+
+#### Where compare logic lives
+
+`tula()` intercepts and calls `.tula_compare_impl()`, an internal function
+defined in `R/tula_compare.R`. This function owns all compare-mode logic:
+extracting coef_dfs from each model, building the master row set, rendering
+the stacked table, printing footer stats. It is never called directly by users.
+
+### Open questions (must resolve before writing code)
+
+| # | Question | Notes |
+|---|----------|-------|
+| A | **Footer fit statistics** — fixed set for all models regardless of type, or each model contributes its natural stats with blanks where inapplicable? Fixed set is simpler; flexible is more informative but sparse with mixed model types. | Not yet decided. |
+| B | **`ref = TRUE` support** — include in initial implementation, or defer to a future version? | Not yet decided. |
+| C | ~~**Function name**~~ — resolved: no separate exported function. Compare mode is triggered by passing multiple model objects to `tula()`. Internal implementation function is `.tula_compare_impl()`. | Resolved. |
+| D | **Row ordering** — when models have different predictors, what determines the order of rows in the master list? First model's order? Order of first appearance across all models? | Not yet discussed. |
+| E | **Mixed model types** — if lm and glm (or polr) are passed together, is that supported? Any restrictions? | Not yet discussed. |
+| F | **Factor grouping across models** — if a variable is a factor in one model and numeric in another, how is it shown? Group header with blank numeric-model column? | Not yet discussed. |
+
+### Proposed file layout (tentative)
+
+```
+R/tula.R            modified: add .is_regression_model() helper and
+                    multi-model detection block at top of tula() generic;
+                    add `labels` parameter to tula() signature
+R/tula_compare.R    new file: .tula_compare_impl(), new_tula_compare_output(),
+                    print.tula_compare_output()
+R/compare_table.R   new file: format_compare_table() — renders the stacked
+                    coef/SE grid
+```
+
+The only change to an existing file is `R/tula.R` (the generic).
+All model-specific method files (`tula_lm.R`, `tula_glm.R`, etc.) are
+untouched. `tula_compare` does NOT appear in NAMESPACE as an export.
