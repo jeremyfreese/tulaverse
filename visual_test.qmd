@@ -13,477 +13,525 @@ execute:
 ---
 
 ```{r setup}
-# Load the tula package from source.
-# Run this script from the package directory, or set the path below.
 devtools::load_all(".")
 ```
 
----
-
-# lm basics
+# Linear models (lm)
 
 ## Test 1 — Simple lm, all numeric predictors
 
 **Expected:** Two-column header with AIC/BIC on left, N/R²/Adj R² on right.
 Coefficient table with `cyl`, `wt`, `hp`. Intercept at bottom after separator.
-No CI columns in narrow mode; CI columns appear in wide mode.
+Default output includes 95% CI columns (wide mode auto-activates at width ≥ 80).
 
-```{r test1-narrow}
+```{r}
 m1 <- lm(mpg ~ cyl + wt + hp, data = mtcars)
-cat("Narrow (default):\n")
 tula(m1)
 ```
 
-```{r test1-wide}
-cat("Wide (with 95% CI):\n")
-tula(m1, wide = TRUE)
+```{r}
+cat("Explicitly narrow (wide = FALSE):\n")
+tula(m1, wide = FALSE)
 ```
-
----
 
 ## Test 2 — lm with a pre-created factor variable
 
 **Expected:** `cyl_f` appears as a group header row; levels `6` and `8` are
-indented below it. Reference level (`4`) does not appear.
+indented below it. Reference level (`4`) does not appear. Default is wide.
 
-```{r test2}
+```{r}
 mtcars$cyl_f <- factor(mtcars$cyl)
 m2 <- lm(mpg ~ cyl_f + wt, data = mtcars)
-cat("Narrow:\n")
 tula(m2)
-cat("\nWide:\n")
-tula(m2, wide = TRUE)
 ```
-
----
 
 ## Test 3 — lm with `factor()` inline in formula
 
 **Expected:** Same grouping behavior as Test 2. The group header labels read
 `cyl` and `am` (the `factor()` wrapper is stripped for display).
 
-```{r test3}
+```{r}
 m3 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
-cat("Narrow:\n")
 tula(m3)
-cat("\nWide:\n")
-tula(m3, wide = TRUE)
 ```
-
----
 
 ## Test 4 — lm with a three-level factor (iris Species)
 
 **Expected:** `Species` header row; levels `versicolor` and `virginica`
 indented below it. `setosa` (the reference) does not appear.
 
-```{r test4}
+```{r}
 m4 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
-cat("Narrow:\n")
 tula(m4)
-cat("\nWide:\n")
-tula(m4, wide = TRUE)
 ```
-
----
 
 ## Test 5 — lm with an interaction term
 
 **Expected:** The interaction `cyl:factor(am)1` is NOT grouped under a factor
 header — it prints as a plain row. The `factor(am)` levels are grouped normally.
 
-```{r test5}
+```{r}
 m5 <- lm(mpg ~ cyl * factor(am) + wt, data = mtcars)
-cat("Narrow:\n")
 tula(m5)
 ```
 
 ---
 
-# glm basics
+# Generalized linear models (glm)
 
-## Test 6 — glm binomial (logistic regression)
+## Test 6 — Logistic regression (binomial)
 
 **Expected:** Family/link line at top. Header left: AIC, BIC, Log likelihood.
 Header right: N, McFadden R-sq, Nagelkerke R-sq. Coefficient table uses `z`
 and `P>|z|`.
 
-```{r test6}
+```{r}
 m6 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
-cat("Narrow:\n")
 tula(m6)
-cat("\nWide:\n")
-tula(m6, wide = TRUE)
 ```
 
----
+## Test 7 — Logistic regression with factor predictor
 
-## Test 7 — glm binomial with factor predictor
+**Expected:** Factor grouping in glm output: `cyl` header row with indented
+non-reference levels.
 
-**Expected:** Factor grouping in glm output: `factor(cyl)` header row with
-indented non-reference levels.
-
-```{r test7}
+```{r}
 m7 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
-cat("Narrow:\n")
 tula(m7)
-cat("\nWide:\n")
-tula(m7, wide = TRUE)
 ```
 
----
-
-## Test 8 — glm Poisson
+## Test 8 — Poisson regression
 
 **Expected:** `Family: poisson / Link: log` at top. Stat column header is `z`.
 
-```{r test8}
-# Center cyl to avoid perfect separation
+```{r}
 mtcars$cyl_c <- mtcars$cyl - mean(mtcars$cyl)
 m8 <- glm(carb ~ cyl_c + wt, data = mtcars, family = poisson)
-cat("Narrow:\n")
 tula(m8)
-cat("\nWide:\n")
-tula(m8, wide = TRUE)
 ```
 
----
-
-## Test 9 — glm Gaussian (should show `t`, not `z`)
+## Test 9 — Gaussian glm (should show `t`, not `z`)
 
 **Expected:** `Family: gaussian / Link: identity`. Stat column should be `t`
 and p-value header should be `P>|t|`.
 
-```{r test9}
+```{r}
 m9 <- glm(mpg ~ cyl + wt, data = mtcars, family = gaussian)
 tula(m9)
 ```
 
----
-
-## Test 10 — glm with probit link
+## Test 10 — Probit link
 
 **Expected:** `Family: binomial / Link: probit`. Otherwise same structure as
 logistic output.
 
-```{r test10}
+```{r}
 m10 <- glm(am ~ cyl + wt, data = mtcars, family = binomial(link = "probit"))
 tula(m10)
 ```
 
 ---
 
-# `ref = TRUE`
+# Ordered regression (polr / clm)
 
-## Test 16 — `ref = TRUE`: single factor, lm
+```{r}
+library(MASS)
+mtcars$gear_ord <- factor(mtcars$gear, ordered = TRUE)
+```
+
+## Test 11 — polr: basic numeric predictors
+
+**Expected:** `Ordered regression / Link: logistic` family label above header.
+Header left: AIC, BIC, Log likelihood. Header right: N, McFadden R-sq.
+Predictor rows use `z` / `P>|z|`. Cutpoints (`3|4`, `4|5`) appear after an
+extra separator, with Coef. and Std. Err. populated but `z` and `P>|z|` blank.
+
+```{r}
+m11 <- polr(gear_ord ~ mpg + wt, data = mtcars, Hess = TRUE)
+tula(m11)
+```
+
+## Test 12 — polr: factor predictor + cutpoints
+
+**Expected:** Stata-style factor group header (`cyl`) with indented levels
+in the predictor section, *and* cutpoints in the lower section.
+
+```{r}
+m12 <- polr(gear_ord ~ mpg + factor(cyl), data = mtcars, Hess = TRUE)
+tula(m12)
+```
+
+```{r}
+cat("ref = TRUE:\n")
+tula(m12, ref = TRUE)
+```
+
+## Test 13 — polr: exp = TRUE (odds ratios, cutpoints unaffected)
+
+**Expected:** Predictor rows show `exp(b)` / `DMSE`. Cutpoint rows are **not**
+exponentiated (cutpoints are threshold parameters, not log-odds).
+
+```{r}
+tula(m12, exp = TRUE)
+```
+
+## Test 14 — polr: four-level outcome (three cutpoints)
+
+**Expected:** Three cutpoint rows (`XS|S`, `S|M`, `M|L`).
+
+```{r}
+iris4 <- iris
+iris4$size <- cut(iris$Sepal.Length,
+                  breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
+                  labels = c("XS", "S", "M", "L"),
+                  include.lowest = TRUE,
+                  ordered_result = TRUE)
+m14 <- polr(size ~ Sepal.Width + Petal.Length + Species, data = iris4, Hess = TRUE)
+tula(m14)
+```
+
+## Test 15 — polr: probit link
+
+**Expected:** Family label reads `Ordered regression / Link: probit`.
+
+```{r}
+m15 <- polr(gear_ord ~ mpg + wt, data = mtcars, method = "probit", Hess = TRUE)
+tula(m15)
+```
+
+## Test 16 — clm (ordinal package)
+
+**Expected:** Output structurally identical to the matching polr model (Test 12).
+Family label reads `Ordered regression / Link: logit`. Coefficients should
+agree closely (minor differences from optimiser tolerance).
+
+```{r}
+if (requireNamespace("ordinal", quietly = TRUE)) {
+  library(ordinal)
+  mc16 <- clm(gear_ord ~ mpg + factor(cyl), data = mtcars)
+  cat("clm (ordinal):\n")
+  tula(mc16)
+  cat("\npolr (MASS) — same model for comparison:\n")
+  tula(m12)
+} else {
+  cat("ordinal package not installed — clm test skipped.\n")
+}
+```
+
+---
+
+# Negative binomial (MASS::glm.nb)
+
+## Test 17 — negbin: basic numeric predictors
+
+**Expected:** Family label `"Family: Negative Binomial / Link: log"`.
+Header: AIC, BIC, Log likelihood (left), Number of obs, McFadden R-sq (right).
+Coefficient table with `z` / `P>|z|`. Ancillary section at bottom with
+`/lnalpha` and `alpha` rows, each preceded by a separator.
+
+```{r}
+m17 <- glm.nb(carb ~ wt + hp, data = mtcars)
+tula(m17)
+```
+
+## Test 18 — negbin: factor predictor
+
+**Expected:** `cyl` appears as a grouped factor header with indented levels
+`6` and `8`. Ancillary section unchanged.
+
+```{r}
+m18 <- glm.nb(carb ~ wt + factor(cyl), data = mtcars)
+tula(m18)
+```
+
+```{r}
+cat("ref = TRUE:\n")
+tula(m18, ref = TRUE)
+```
+
+## Test 19 — negbin: exp = TRUE (IRR)
+
+**Expected:** Column header reads `"IRR"` (not `"exp(b)"`). SE column reads
+`"DMSE"`. Coefficients are exponentiated. Ancillary section (`/lnalpha` and
+`alpha`) is NOT exponentiated.
+
+```{r}
+tula(m18, exp = TRUE, ref = TRUE)
+```
+
+## Test 20 — negbin: width constraints
+
+**Expected:** Long variable names are truncated with `~`. All rows (including
+ancillary) have the same total width.
+
+```{r}
+df20 <- mtcars
+df20$very_long_variable_name <- mtcars$hp
+m20 <- glm.nb(carb ~ wt + very_long_variable_name + factor(cyl), data = df20)
+tula(m20, width = 68)
+```
+
+## Test 21 — negbin vs Poisson comparison
+
+**Expected:** Coefficient signs and rough magnitudes similar between NB and
+Poisson. The NB model has an ancillary section; the Poisson does not.
+
+```{r}
+cat("Negative binomial:\n")
+tula(m17)
+cat("\nPoisson:\n")
+m_pois <- glm(carb ~ wt + hp, data = mtcars, family = poisson)
+tula(m_pois)
+```
+
+---
+
+# ref = TRUE — Reference level rows
+
+## Test 22 — Single factor, lm
 
 **Expected:** `ref = FALSE` (default) shows only non-reference levels (`6`, `8`).
-`ref = TRUE` appends a `4 (base)` row at the bottom of the `cyl` group with
+`ref = TRUE` adds a `4 (base)` row at the bottom of the `cyl` group with
 `0` in the Coef. column and blanks for SE, t, and P>|t|.
 
-```{r test16}
-m16 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+```{r}
+m22 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
 cat("ref = FALSE (default):\n")
-tula(m16)
+tula(m22)
 cat("\nref = TRUE:\n")
-tula(m16, ref = TRUE)
-cat("\nref = TRUE, wide = TRUE:\n")
-tula(m16, ref = TRUE, wide = TRUE)
+tula(m22, ref = TRUE)
 ```
 
----
+## Test 23 — Two factors, lm
 
-## Test 17 — `ref = TRUE`: two factors, lm
+**Expected:** Each factor group gets its own `(base)` row. `cyl` base = `4`;
+`am` base = `0`.
 
-**Expected:** Each factor group gets its own `(base)` row appended after its
-non-reference levels. `cyl` base = `4`; `am` base = `0`.
-
-```{r test17}
-m17 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
-cat("ref = TRUE, narrow:\n")
-tula(m17, ref = TRUE)
-cat("\nref = TRUE, wide:\n")
-tula(m17, ref = TRUE, wide = TRUE)
+```{r}
+m23 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+tula(m23, ref = TRUE)
 ```
 
----
-
-## Test 18 — `ref = TRUE`: glm with factor predictor
+## Test 24 — glm with factor predictor
 
 **Expected:** Reference row appears in the glm coefficient table just as in lm.
-Stat column is `z`; p-value column is `P>|z|`. CI columns blank on ref row
-when `wide = TRUE`.
+Stat column is `z`; p-value column is `P>|z|`.
 
-```{r test18}
-m18 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
-cat("ref = TRUE, narrow:\n")
-tula(m18, ref = TRUE)
-cat("\nref = TRUE, wide:\n")
-tula(m18, ref = TRUE, wide = TRUE)
+```{r}
+m24 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+tula(m24, ref = TRUE)
 ```
 
----
-
-## Test 19 — `ref = TRUE`: three-level factor (iris)
+## Test 25 — Three-level factor (iris)
 
 **Expected:** `setosa` appears as the base row after `versicolor` and
-`virginica`. All other columns blank on that row.
+`virginica`.
 
-```{r test19}
-m19 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
+```{r}
+m25 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
 cat("ref = FALSE (default):\n")
-tula(m19)
+tula(m25)
 cat("\nref = TRUE:\n")
-tula(m19, ref = TRUE)
+tula(m25, ref = TRUE)
 ```
 
----
+## Test 26 — Long factor labels (truncation check)
 
-## Test 21 — `ref = TRUE` with long factor level labels (truncation check)
+**Expected:** Factor level labels long enough to require truncation (`~`).
+The base-category row should truncate cleanly, and all rows must be the same
+width as the separator lines.
 
-**Expected:** Factor level labels long enough to require truncation (`~`) in
-the label column. The base-category row (estimate = 0, rest blank) should
-truncate cleanly alongside the other rows, and all rows — including the base
-row — must be exactly the same width as the separator lines. Run in both
-narrow (default) and wide modes.
-
-```{r test21}
-df21 <- mtcars
-df21$engine_type <- factor(
+```{r}
+df26 <- mtcars
+df26$engine_type <- factor(
   mtcars$cyl,
   levels = c(4, 6, 8),
   labels = c("Four-cylinder inline engine",
              "Six-cylinder inline engine",
              "Eight-cylinder V-type engine")
 )
-m21 <- lm(mpg ~ wt + engine_type, data = df21)
-cat("Narrow (ref = TRUE):\n")
-tula(m21, ref = TRUE)
-cat("\nWide (ref = TRUE):\n")
-tula(m21, ref = TRUE, wide = TRUE)
+m26 <- lm(mpg ~ wt + engine_type, data = df26)
+tula(m26, ref = TRUE)
 ```
 
----
-
-## Test 21b — binary factor collapse (level name = variable name)
+## Test 27 — Binary factor collapse
 
 **Expected:** When a binary factor's non-reference level label matches the
 variable name (case-insensitively), the group-header row is suppressed and the
 coefficient prints directly on the variable name row (no indentation).
-`male` should appear once, not as a header + indented row.
+`male` should appear once, not as a header + indented row. `treatment` does
+NOT collapse because the non-ref level is `treated` ≠ `treatment`.
 
-Three checks: (1) collapse fires; (2) collapse suppressed when label differs
-from name (`treated` ≠ `treatment`); (3) collapse suppressed when `ref = TRUE`
-because the ref row makes a second row.
-
-```{r test21b}
-df21b <- mtcars
-# "male": non-ref level name matches variable name → should collapse
-df21b$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
-                     levels = c("female", "male"))
-# "treatment": non-ref level name does NOT match variable name → no collapse
-df21b$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
-                          levels = c("control", "treated"))
-m21b <- lm(mpg ~ wt + male + treatment, data = df21b)
-
+```{r}
+df27 <- mtcars
+df27$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
+                    levels = c("female", "male"))
+df27$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
+                         levels = c("control", "treated"))
+m27 <- lm(mpg ~ wt + male + treatment, data = df27)
 cat("Default (ref = FALSE) — 'male' collapses, 'treatment' does not:\n")
-tula(m21b)
-cat("\nref = TRUE — 'male' has 2 rows (no collapse):\n")
-tula(m21b, ref = TRUE)
+tula(m27)
+cat("\nref = TRUE — collapse suppressed (male has 2 rows):\n")
+tula(m27, ref = TRUE)
 ```
 
 ---
 
-# `label`
+# label — Haven-style value labels
 
-## Test 22 — `label = TRUE` with factor levels that already are label strings
+## Test 28 — Factor levels already meaningful strings
 
-**Expected:** When a factor variable's levels are already meaningful strings
-(e.g. `"Four"`, `"Six"`, `"Eight"`), `label = TRUE` and `label = FALSE` produce
-identical output — the level names are used as-is.
+**Expected:** `label = TRUE` and `label = FALSE` produce identical output when
+levels are already strings (e.g. `"Four"`, `"Six"`, `"Eight"`).
 
-```{r test22}
-df22 <- mtcars
-df22$cyl_named <- factor(mtcars$cyl,
-                          levels = c(4, 6, 8),
-                          labels = c("Four", "Six", "Eight"))
-m22 <- lm(mpg ~ cyl_named + wt, data = df22)
+```{r}
+df28 <- mtcars
+df28$cyl_named <- factor(mtcars$cyl,
+                         levels = c(4, 6, 8),
+                         labels = c("Four", "Six", "Eight"))
+m28 <- lm(mpg ~ cyl_named + wt, data = df28)
 cat("label = TRUE (default):\n")
-tula(m22, ref = TRUE, label = TRUE)
+tula(m28, ref = TRUE, label = TRUE)
 cat("\nlabel = FALSE:\n")
-tula(m22, ref = TRUE, label = FALSE)
+tula(m28, ref = TRUE, label = FALSE)
 ```
 
----
-
-## Test 23 — `label = TRUE` with haven-style value labels
+## Test 29 — Haven-style value labels
 
 **Expected:** When the data column carries a `labels` attribute (as produced
-by `haven` when reading SPSS/Stata files), `label = TRUE` substitutes the
-numeric codes with their text labels in the output. `label = FALSE` shows
-the raw numeric suffixes instead. `tula()` recovers the labels from the
-original data even when `factor()` is used inline in the formula (which would
-normally strip the attribute).
+by haven), `label = TRUE` substitutes numeric codes with text labels.
+`label = FALSE` shows raw numeric suffixes.
 
-```{r test23}
-df23 <- mtcars
-# Simulate a haven_labelled column: a plain numeric with a 'labels' attr.
-# In real usage this comes from haven::read_spss() / haven::read_dta().
-df23$cyl_lbl <- mtcars$cyl
-attr(df23$cyl_lbl, "labels") <- c("Four cylinders" = 4,
+```{r}
+df29 <- mtcars
+df29$cyl_lbl <- mtcars$cyl
+attr(df29$cyl_lbl, "labels") <- c("Four cylinders" = 4,
                                    "Six cylinders"  = 6,
                                    "Eight cylinders" = 8)
-
-# Wrap in factor() in the formula to get factor grouping in the output.
-m23 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df23)
+m29 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df29)
 cat("label = TRUE (default) — shows full label text:\n")
-tula(m23, ref = TRUE, label = TRUE)
-cat("\nlabel = FALSE — shows raw numeric suffixes '4', '6', '8':\n")
-tula(m23, ref = TRUE, label = FALSE)
+tula(m29, ref = TRUE, label = TRUE)
+cat("\nlabel = FALSE — shows raw numeric suffixes:\n")
+tula(m29, ref = TRUE, label = FALSE)
 ```
 
 ---
 
-# `exp = TRUE`
+# exp = TRUE — Exponentiated coefficients
 
-## Test 24 — `exp = TRUE`: lm, numeric predictors
+## Test 30 — lm, numeric predictors
 
 **Expected:** Column headers change to `exp(b)` and `DMSE`. Estimate column
-shows `exp(coef)`, SE column shows `exp(coef) * SE`. The `t` and `P>|t|`
-columns are unchanged from the non-exponentiated output. CIs are suppressed.
+shows `exp(coef)`, SE column shows `exp(coef) * SE`. `t` and `P>|t|`
+unchanged. CIs suppressed.
 
-```{r test24}
-m24 <- lm(mpg ~ cyl + wt, data = mtcars)
+```{r}
+m30 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("exp = FALSE (default):\n")
-tula(m24)
+tula(m30, wide = FALSE)
 cat("\nexp = TRUE:\n")
-tula(m24, exp = TRUE)
+tula(m30, exp = TRUE)
 ```
 
----
+## Test 31 — lm with factor and ref = TRUE
 
-## Test 25 — `exp = TRUE`: lm with factor and `ref = TRUE`
+**Expected:** Factor header row blank. Non-reference levels show exponentiated
+coefficients and DMSE. Reference-level row shows `1` instead of `0`.
 
-**Expected:** Factor group header row still blank. Non-reference levels show
-exponentiated coefficients and DMSE. Reference-level row shows `1` instead of
-`0`. Intercept row is exponentiated normally.
-
-```{r test25}
-m25 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
-cat("exp = TRUE, ref = TRUE:\n")
-tula(m25, exp = TRUE, ref = TRUE)
-cat("\nexp = FALSE, ref = TRUE (comparison):\n")
-tula(m25, ref = TRUE)
+```{r}
+m31 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+tula(m31, exp = TRUE, ref = TRUE)
 ```
 
----
+## Test 32 — glm logistic (odds ratios)
 
-## Test 26 — `exp = TRUE`: glm logistic (odds ratios)
+**Expected:** `exp(b)` produces odds ratios for logistic model. Compare with
+R's `exp(coef(m))`.
 
-**Expected:** For a logistic model, `exp(b)` produces odds ratios. Compare with
-R's built-in `exp(coef(m))` to verify values match. DMSE = `exp(b) * SE`.
-Stat column is `z`; `P>|z|` unchanged.
-
-```{r test26}
-m26 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
-cat("exp = FALSE:\n")
-tula(m26)
-cat("\nexp = TRUE (odds ratios):\n")
-tula(m26, exp = TRUE)
+```{r}
+m32 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+cat("exp = TRUE (odds ratios):\n")
+tula(m32, exp = TRUE)
 cat("\nVerification — exp(coef):\n")
-print(exp(coef(m26)))
+print(exp(coef(m32)))
+```
+
+## Test 33 — glm with factor and ref = TRUE
+
+**Expected:** Reference rows show `1`. Factor headers blank. Stat and p-value
+unchanged.
+
+```{r}
+m33 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+tula(m33, exp = TRUE, ref = TRUE)
 ```
 
 ---
 
-## Test 27 — `exp = TRUE`: glm with factor and `ref = TRUE`
+# level — Confidence interval width
 
-**Expected:** Same as Test 25 but for glm. Reference rows show `1`. Factor
-headers blank. Stat and p-value unchanged.
+## Test 34 — 90% vs 95% vs 99% CIs
 
-```{r test27}
-m27 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
-cat("exp = TRUE, ref = TRUE:\n")
-tula(m27, exp = TRUE, ref = TRUE)
-```
+**Expected:** CI bounds narrow at 90% and widen at 99%. Column header updates:
+`[90% Conf`, `[95% Conf`, `[99% Conf`. Point estimates, SEs, statistics, and
+p-values are identical across all three.
 
----
-
-# `level` — confidence interval width
-
-## Test 30a — `level`: 90% vs 95% vs 99% (lm)
-
-**Expected:** CI bounds narrow as level decreases and widen as it increases.
-Column header updates to match: `[90% Conf`, `[95% Conf`, `[99% Conf`.
-Point estimates, SEs, t-statistics, and p-values are identical across all three.
-
-```{r test30a}
-m30a <- lm(mpg ~ cyl + wt, data = mtcars)
+```{r}
+m34 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("level = 90:\n")
-tula(m30a, wide = TRUE, level = 90)
+tula(m34, level = 90)
 cat("\nlevel = 95 (default):\n")
-tula(m30a, wide = TRUE)
+tula(m34)
 cat("\nlevel = 99:\n")
-tula(m30a, wide = TRUE, level = 99)
+tula(m34, level = 99)
 ```
 
----
-
-## Test 30b — `level`: proportion input and error handling
+## Test 35 — Proportion input and error handling
 
 **Expected:** `level = 0.90` is treated the same as `level = 90` (auto-multiplied
-by 100). `level = 40` produces an informative error.
+by 100). `level = 40` produces an error.
 
-```{r test30b}
+```{r}
 cat("level = 0.90 (same as 90):\n")
-tula(m30a, wide = TRUE, level = 0.90)
+tula(m34, level = 0.90)
 cat("\nlevel = 40 (should error):\n")
 tryCatch(
-  tula(m30a, wide = TRUE, level = 40),
+  tula(m34, level = 40),
   error = function(e) cat("Error caught:", conditionMessage(e), "\n")
 )
 ```
 
 ---
 
-# `wide` / `width` options
+# wide / width — Display options
 
-## Test 30 — `exp = TRUE` with `wide = TRUE` (message + suppression)
+## Test 36 — exp = TRUE suppresses CIs with a message
 
 **Expected:** A message is printed ("Note: wide output is not yet supported
-with exp = TRUE; CIs suppressed.") and the output is narrow (no CI columns).
-When `exp = FALSE` with `wide = TRUE`, CIs appear normally.
+with exp = TRUE; CIs suppressed.") and the output has no CI columns.
 
-```{r test30}
-m30 <- lm(mpg ~ cyl + wt, data = mtcars)
+```{r}
+m36 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("exp = TRUE, wide = TRUE (should message, suppress CIs):\n")
-tula(m30, exp = TRUE, wide = TRUE)
-cat("\nexp = FALSE, wide = TRUE (CIs should appear):\n")
-tula(m30, wide = TRUE)
+tula(m36, exp = TRUE, wide = TRUE)
 ```
 
----
+## Test 37 — exp = TRUE with explicit wide = FALSE (no message)
 
-## Test 31 — `exp = TRUE` with `wide = FALSE` (no message)
+**Expected:** No message about CIs when `wide = FALSE` is set explicitly.
 
-**Expected:** No message about CIs is printed when `wide = FALSE` is set
-explicitly, even with `exp = TRUE`.
-
-```{r test31}
-m31 <- lm(mpg ~ cyl + wt, data = mtcars)
+```{r}
 cat("exp = TRUE, wide = FALSE (should NOT message):\n")
-tula(m31, exp = TRUE, wide = FALSE)
+tula(m36, exp = TRUE, wide = FALSE)
 ```
 
----
+## Test 38 — width below minimum (warning + clamp to 60)
 
-## Test 33 — `width` below minimum (warning + clamp to 60)
+**Expected:** A warning is issued ("width cannot be less than 60; using
+width = 60.") and the output is produced at width = 60.
 
-**Expected:** A warning is issued ("width cannot be less than 60; using width = 60.")
-and the output is produced at width = 60, not suppressed.
-
-```{r test33}
-cat("lm with width = 40 (should warn and use 60):\n")
+```{r}
+cat("width = 40 (should warn and use 60):\n")
 withCallingHandlers(
   tula(lm(mpg ~ wt + cyl, data = mtcars), width = 40),
   warning = function(w) { cat("Warning:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") }
@@ -494,257 +542,53 @@ withCallingHandlers(
 
 # Edge cases
 
-## Test 34 — Very small p-values
+## Test 39 — Very small p-values
 
 **Expected:** p-values below 0.0001 display as `< .0001`.
 
-```{r test34}
-m34 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
-tula(m34)
+```{r}
+m39 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+tula(m39)
 ```
 
----
-
-## Test 35 — Single predictor (minimal model)
+## Test 40 — Single predictor (minimal model)
 
 **Expected:** Header and table format correctly with just one covariate row
 plus the intercept.
 
-```{r test35}
-m35 <- lm(mpg ~ wt, data = mtcars)
-cat("Narrow:\n")
-tula(m35)
-cat("\nWide:\n")
-tula(m35, wide = TRUE)
+```{r}
+m40 <- lm(mpg ~ wt, data = mtcars)
+tula(m40)
 ```
 
----
-
-## Test 36 — Ordered factor
+## Test 41 — Ordered factor as predictor
 
 **Expected:** Ordered factors are treated the same as regular factors — grouped
 under a header row with indented levels.
 
-```{r test36}
+```{r}
 mtcars$gear_o <- factor(mtcars$gear, ordered = TRUE)
-m36 <- lm(mpg ~ gear_o + wt, data = mtcars)
-tula(m36)
+m41 <- lm(mpg ~ gear_o + wt, data = mtcars)
+tula(m41)
 ```
 
----
+## Test 42 — glm with small sample (stress test)
 
-## Test 37 — glm with factor and small sample (stress test)
-
-```{r test37}
-# Use only a subset of iris for a binomial model
+```{r}
 iris_bin <- iris
 iris_bin$is_virginica <- as.integer(iris_bin$Species == "virginica")
-m37 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
+m42 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
            data = iris_bin, family = binomial)
-cat("Narrow:\n")
-tula(m37)
-cat("\nWide:\n")
-tula(m37, wide = TRUE)
+tula(m42)
 ```
 
----
-
-## Test 38 — Error handling: unsupported object type
+## Test 43 — Unsupported object type (error handling)
 
 **Expected:** A clear, informative error message naming the unsupported class.
 
-```{r test38}
+```{r}
 tryCatch(
   tula(list(x = 1, y = 2)),
   error = function(e) cat("Error caught as expected:\n", conditionMessage(e), "\n")
 )
-```
-
----
-
-# polr / ordered regression (MASS)
-
-```{r polr-setup}
-library(MASS)
-mtcars$gear_ord <- factor(mtcars$gear, ordered = TRUE)   # 3 levels → 2 cutpoints
-```
-
-## Test 39 — polr: basic numeric predictors
-
-**Expected:** `Ordered regression / Link: logistic` family label above header.
-Header left: AIC, BIC, Log likelihood. Header right: N, McFadden R-sq.
-Predictor rows use `z` / `P>|z|`. Cutpoints (`3|4`, `4|5`) appear after an
-extra separator, with Coef. and Std. Err. populated but `z` and `P>|z|` blank.
-
-```{r test39}
-m39 <- polr(gear_ord ~ mpg + wt, data = mtcars, Hess = TRUE)
-cat("Narrow:\n")
-tula(m39, width = 72)
-cat("\nWide (CIs on both predictors and cutpoints):\n")
-tula(m39, wide = TRUE, width = 100)
-```
-
----
-
-## Test 40 — polr: factor predictor, factor grouping + cutpoints
-
-**Expected:** Stata-style factor group header (`cyl`) with indented levels
-in the predictor section, *and* cutpoints in the lower section. The two
-sections must be cleanly separated.
-
-```{r test40}
-m40 <- polr(gear_ord ~ mpg + factor(cyl), data = mtcars, Hess = TRUE)
-cat("Narrow:\n")
-tula(m40, width = 72)
-cat("\nref = TRUE:\n")
-tula(m40, ref = TRUE, width = 72)
-```
-
----
-
-## Test 41 — polr: exp = TRUE (odds ratios, cutpoints unaffected)
-
-**Expected:** Predictor rows show `exp(b)` / `DMSE`; column headers change.
-Cutpoint rows are **not** exponentiated — they show raw values as before
-(cutpoints are threshold parameters, not log-odds). A note about CIs being
-suppressed should appear.
-
-```{r test41}
-cat("exp = TRUE:\n")
-tula(m40, exp = TRUE, width = 72)
-cat("\nexp = TRUE, wide = FALSE (no message):\n")
-tula(m40, exp = TRUE, wide = FALSE, width = 72)
-```
-
----
-
-## Test 42 — polr: four-level outcome (three cutpoints)
-
-**Expected:** Three cutpoint rows (`XS|S`, `S|M`, `M|L`) in the lower section.
-
-```{r test42}
-iris4 <- iris
-iris4$size <- cut(iris$Sepal.Length,
-                  breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
-                  labels = c("XS", "S", "M", "L"),
-                  include.lowest = TRUE,
-                  ordered_result = TRUE)
-m42 <- polr(size ~ Sepal.Width + Petal.Length + Species, data = iris4, Hess = TRUE)
-tula(m42, width = 72)
-```
-
----
-
-## Test 43 — polr: probit link
-
-**Expected:** Family label reads `Ordered regression / Link: probit`.
-Output structure identical to logistic; only coefficient values differ.
-
-```{r test43}
-m43 <- polr(gear_ord ~ mpg + wt, data = mtcars, method = "probit", Hess = TRUE)
-tula(m43, width = 72)
-```
-
----
-
-## Test 44 — clm (ordinal package, if installed)
-
-**Expected:** Output structurally identical to the matching `polr` model.
-Family label reads `Ordered regression / Link: logit`. Coefficients should
-agree closely with Test 40 (minor differences from optimiser tolerance).
-
-```{r test44}
-if (requireNamespace("ordinal", quietly = TRUE)) {
-  library(ordinal)
-  mc44 <- clm(gear_ord ~ mpg + factor(cyl), data = mtcars)
-  cat("clm (ordinal):\n")
-  tula(mc44, width = 72)
-  cat("\npolr (MASS) — same model for comparison:\n")
-  tula(m40, width = 72)
-} else {
-  cat("ordinal package not installed — clm test skipped.\n")
-}
-```
-
----
-
-# Negative binomial (`MASS::glm.nb`)
-
-## Test 45 — negbin: basic numeric predictors
-
-**Expected:** Family label `"Family: Negative Binomial / Link: log"`.
-Header: AIC, BIC, Log likelihood (left), Number of obs, McFadden R-sq (right).
-Coefficient table with `z` / `P>|z|`. Ancillary section at bottom with
-`/lnalpha` and `alpha` rows, each preceded by a separator, with blank z and p
-columns.
-
-```{r test45}
-m45 <- glm.nb(carb ~ wt + hp, data = mtcars)
-cat("Narrow:\n")
-tula(m45)
-cat("\nWide (CIs on coefficients and ancillary):\n")
-tula(m45, wide = TRUE)
-```
-
----
-
-## Test 46 — negbin: factor predictor
-
-**Expected:** `cyl` appears as a grouped factor header with indented levels
-`6` and `8` in the coefficient section. Ancillary section unchanged.
-
-```{r test46}
-m46 <- glm.nb(carb ~ wt + factor(cyl), data = mtcars)
-cat("Narrow:\n")
-tula(m46)
-cat("\nref = TRUE:\n")
-tula(m46, ref = TRUE)
-cat("\nref = TRUE, wide = TRUE:\n")
-tula(m46, ref = TRUE, wide = TRUE)
-```
-
----
-
-## Test 47 — negbin: exp = TRUE (IRR)
-
-**Expected:** Column header reads `"IRR"` (not `"exp(b)"`). SE column reads
-`"DMSE"`. Coefficients are exponentiated. Reference rows (if shown) display
-`1`. Ancillary section (`/lnalpha` and `alpha`) is NOT exponentiated — same
-values as without `exp`. Message about CIs being suppressed.
-
-```{r test47}
-cat("exp = TRUE, ref = TRUE:\n")
-tula(m46, exp = TRUE, ref = TRUE)
-cat("\nexp = TRUE, wide = FALSE (no message):\n")
-tula(m46, exp = TRUE, wide = FALSE)
-```
-
----
-
-## Test 48 — negbin: width constraints
-
-**Expected:** Long variable names are truncated with `~`. All rows (including
-ancillary) have the same total width.
-
-```{r test48}
-df48 <- mtcars
-df48$very_long_variable_name <- mtcars$hp
-m48 <- glm.nb(carb ~ wt + very_long_variable_name + factor(cyl), data = df48)
-tula(m48, width = 68)
-```
-
----
-
-## Test 49 — negbin vs Poisson comparison
-
-**Expected:** Coefficient signs and rough magnitudes should be similar between
-NB and Poisson on the same data. The NB model has an ancillary section; the
-Poisson does not.
-
-```{r test49}
-cat("Negative binomial:\n")
-tula(m45)
-cat("\nPoisson:\n")
-m_pois <- glm(carb ~ wt + hp, data = mtcars, family = poisson)
-tula(m_pois)
 ```

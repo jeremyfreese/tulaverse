@@ -78,6 +78,11 @@ tulaplot <- function(data = NULL, mapping = ggplot2::aes(), ...,
 #'
 #' @export
 theme_tula <- function(base_size = 14, base_family = "sans") {
+  # Per-geom defaults for filled geoms: thin black outlines.
+  # GeomBar covers geom_bar(), geom_col(), and geom_histogram().
+  # These are global (session-wide) but take priority over element_geom().
+  ggplot2::update_geom_defaults("bar", list(colour = "black", linewidth = 0.3))
+
   half_line <- base_size / 2
 
   ggplot2::theme(
@@ -194,7 +199,7 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
 
     # --- Facet strips ---
     strip.background = ggplot2::element_rect(
-      fill   = "#E0E0E0",
+      fill   = "#F2F2F2",
       colour = NA
     ),
     strip.text = ggplot2::element_text(
@@ -204,6 +209,15 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
         t = half_line / 2, b = half_line / 2,
         l = half_line,     r = half_line
       )
+    ),
+
+    # --- Default geom aesthetics ---
+    # colour = black for points, lines, and borders; fill = stc1 blue for
+    # bars/histograms/areas. Bar outlines are set to thin black above via
+    # update_geom_defaults().
+    geom = ggplot2::element_geom(
+      colour = "black",
+      fill   = "#1A85FF"
     ),
 
     complete = TRUE

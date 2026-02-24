@@ -83,7 +83,221 @@ tulaplot(mtcars, aes(x = wt, y = mpg)) +
   labs(title = "User override: lightyellow background (no warnings)")
 ```
 
-## 9. All 15 palette colors displayed
+## 9. Line plot — single series (should be stc1 blue)
+
+```{r}
+tulaplot(economics, aes(x = date, y = unemploy / 1000)) +
+  geom_line() +
+  labs(title = "US unemployment over time",
+       x = "Date", y = "Unemployed (millions)")
+```
+
+## 10. Line plot — multiple series with color
+
+```{r}
+library(tidyr)
+library(dplyr)
+econ_long <- economics |>
+  mutate(unemp_rate = unemploy / pop * 100,
+         save_rate  = psavert) |>
+  select(date, unemp_rate, save_rate) |>
+  pivot_longer(-date, names_to = "series", values_to = "value")
+
+tulaplot(econ_long, aes(x = date, y = value, color = series)) +
+  geom_line() +
+  scale_color_tula() +
+  labs(title = "Two time series", x = "Date", y = "Percent",
+       color = "Series")
+```
+
+## 11. Histogram — single variable (should be stc1 blue fill)
+
+```{r}
+tulaplot(mtcars, aes(x = mpg)) +
+  geom_histogram(binwidth = 2) +
+  labs(title = "Distribution of MPG", x = "Miles per gallon", y = "Count")
+```
+
+## 12. Histogram — overlapping by group
+
+```{r}
+tulaplot(mtcars, aes(x = mpg, fill = factor(cyl))) +
+  geom_histogram(binwidth = 2, alpha = 0.6, position = "identity") +
+  scale_fill_tula() +
+  labs(title = "MPG distribution by cylinder count",
+       x = "Miles per gallon", y = "Count", fill = "Cylinders")
+```
+
+## 13. Boxplot — single (stc1 blue fill)
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), y = mpg)) +
+  geom_boxplot() +
+  labs(title = "MPG by cylinders", x = "Cylinders", y = "Miles per gallon")
+```
+
+## 14. Boxplot — colored by group
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), y = mpg, fill = factor(cyl))) +
+  geom_boxplot() +
+  scale_fill_tula() +
+  theme(legend.position = "none") +
+  labs(title = "MPG by cylinders (colored)", x = "Cylinders",
+       y = "Miles per gallon")
+```
+
+## 15. Density plot — overlapping groups
+
+```{r}
+tulaplot(mtcars, aes(x = mpg, fill = factor(cyl))) +
+  geom_density(alpha = 0.5) +
+  scale_fill_tula() +
+  labs(title = "MPG density by cylinders", x = "Miles per gallon",
+       y = "Density", fill = "Cylinders")
+```
+
+## 16. Bar chart — simple counts (stc1 blue fill)
+
+```{r}
+tulaplot(mtcars, aes(x = factor(gear))) +
+  geom_bar() +
+  labs(title = "Number of cars by gear count", x = "Gears", y = "Count")
+```
+
+## 17. Stacked bar chart
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), fill = factor(gear))) +
+  geom_bar() +
+  scale_fill_tula() +
+  labs(title = "Cylinders with gear breakdown (stacked)",
+       x = "Cylinders", y = "Count", fill = "Gears")
+```
+
+## 18. Scatter with smooth line
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  labs(title = "Weight vs MPG with linear fit",
+       x = "Weight (1000 lbs)", y = "Miles per gallon")
+```
+
+## 19. Scatter with smooth — grouped
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_tula() +
+  labs(title = "Grouped linear fits",
+       x = "Weight (1000 lbs)", y = "Miles per gallon",
+       color = "Cylinders")
+```
+
+## 20. Violin plot
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), y = mpg, fill = factor(cyl))) +
+  geom_violin(trim = FALSE) +
+  scale_fill_tula() +
+  theme(legend.position = "none") +
+  labs(title = "MPG violin plots by cylinders",
+       x = "Cylinders", y = "Miles per gallon")
+```
+
+## 21. Jitter/strip plot
+
+```{r}
+tulaplot(mtcars, aes(x = factor(cyl), y = mpg)) +
+  geom_jitter(width = 0.2, size = 2) +
+  labs(title = "Jittered points by cylinders",
+       x = "Cylinders", y = "Miles per gallon")
+```
+
+## 22. Facet grid — two variables
+
+```{r}
+tulaplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  facet_grid(am ~ cyl, labeller = labeller(
+    am = c("0" = "Automatic", "1" = "Manual"))) +
+  labs(title = "Facet grid: transmission x cylinders")
+```
+
+## Using `theme_tula()` standalone with plain `ggplot()`
+
+These tests show that `theme_tula()` can be added to any ggplot — including
+plots built by other packages — to get the tula look.
+
+## 23. `ggplot()` + `theme_tula()` — scatterplot
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  theme_tula() +
+  labs(title = "Plain ggplot() + theme_tula()")
+```
+
+## 24. `ggplot()` + `theme_tula()` — bar chart with thin black outlines
+
+```{r}
+ggplot(mtcars, aes(x = factor(cyl))) +
+  geom_bar() +
+  theme_tula() +
+  labs(title = "Plain ggplot() bar chart + theme_tula()",
+       x = "Cylinders", y = "Count")
+```
+
+## 25. `ggplot()` + `theme_tula()` — line plot
+
+```{r}
+ggplot(economics, aes(x = date, y = unemploy / 1000)) +
+  geom_line() +
+  theme_tula() +
+  labs(title = "Plain ggplot() line plot + theme_tula()",
+       x = "Date", y = "Unemployed (millions)")
+```
+
+## 26. `ggplot()` + `theme_tula()` — grouped with tula color scale
+
+```{r}
+ggplot(mtcars, aes(x = wt, y = mpg, color = factor(cyl))) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_color_tula() +
+  theme_tula() +
+  labs(title = "ggplot() + scale_color_tula() + theme_tula()",
+       x = "Weight (1000 lbs)", y = "Miles per gallon",
+       color = "Cylinders")
+```
+
+## 27. `ggplot()` + `theme_tula()` — histogram
+
+```{r}
+ggplot(mtcars, aes(x = mpg)) +
+  geom_histogram(binwidth = 2) +
+  theme_tula() +
+  labs(title = "Plain ggplot() histogram + theme_tula()",
+       x = "Miles per gallon", y = "Count")
+```
+
+## 28. `ggplot()` + `theme_tula()` — faceted boxplot
+
+```{r}
+ggplot(mtcars, aes(x = factor(vs), y = mpg, fill = factor(vs))) +
+  geom_boxplot() +
+  scale_fill_tula() +
+  facet_wrap(~ cyl) +
+  theme_tula() +
+  theme(legend.position = "none") +
+  labs(title = "ggplot() faceted boxplot + theme_tula()",
+       x = "Engine type", y = "Miles per gallon")
+```
+
+## 29. All 15 palette colors displayed
 
 ```{r}
 df15 <- data.frame(

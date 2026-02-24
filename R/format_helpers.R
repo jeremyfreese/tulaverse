@@ -3,7 +3,7 @@
 #' Strip the leading zero from a formatted numeric string.
 #'
 #' Converts "0.43" -> ".43", "-0.43" -> "-.43". Leaves strings that do not
-#' match (integers, scientific notation, "< .0001", etc.) unchanged.
+#' match (integers, scientific notation, "<.0001", etc.) unchanged.
 #' Applied after formatting so the column-width padding is recalculated
 #' against the shorter string.
 .strip_lead_zero <- function(s) {
@@ -37,7 +37,7 @@ fmt_num <- function(x, digits = 4, width = 10) {
 #'
 #' Format a p-value for display.
 #'
-#' Shows "< .0001" when p < 0.0001; otherwise 4 decimal places.
+#' Shows "<.0001" when p < 0.0001; otherwise 4 decimal places.
 #' Leading zeros are suppressed ("0.0324" -> ".0324").
 #'
 #' @param p Numeric scalar.
@@ -45,7 +45,7 @@ fmt_num <- function(x, digits = 4, width = 10) {
 #' @return Character string of exactly `width` characters.
 fmt_pval <- function(p, width = 8) {
   if (is.na(p)) return(strrep(" ", width))
-  s <- if (p < 0.0001) "< .0001" else sprintf("%.4f", p)
+  s <- if (p < 0.0001) "<.0001" else sprintf("%.4f", p)
   s <- .strip_lead_zero(s)
   formatC(s, width = width, flag = " ")
 }
