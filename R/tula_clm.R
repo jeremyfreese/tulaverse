@@ -113,17 +113,18 @@ tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
   new_tula_output(
-    model_type   = "clm",
-    header_left  = header_left,
-    header_right = header_right,
-    coef_df      = coef_df,
-    stat_label   = "z",
-    wide         = wide,
-    family_label = family_label,
-    width        = width,
-    value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
-    exp          = exp,
-    dep_var      = dep_var,
-    level        = level
+    model_type     = "clm",
+    header_left    = header_left,
+    header_right   = header_right,
+    coef_df        = coef_df,
+    stat_label     = "z",
+    wide           = wide,
+    family_label   = family_label,
+    width          = width,
+    value_fmts     = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
+    exp            = exp,
+    dep_var        = dep_var,
+    level          = level,
+    outcome_levels = levels(model$model[[1L]])
   )
 }

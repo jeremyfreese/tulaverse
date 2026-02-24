@@ -144,30 +144,32 @@ new_tula_output <- function(model_type,
                             coef_df,
                             stat_label,
                             wide,
-                            family_label = NULL,
-                            width        = NULL,
-                            value_fmts   = character(0L),
-                            exp          = FALSE,
-                            dep_var      = NULL,
-                            exp_label    = NULL,
-                            ancillary_df = NULL,
-                            level        = 95) {
+                            family_label   = NULL,
+                            width          = NULL,
+                            value_fmts     = character(0L),
+                            exp            = FALSE,
+                            dep_var        = NULL,
+                            exp_label      = NULL,
+                            ancillary_df   = NULL,
+                            level          = 95,
+                            outcome_levels = NULL) {
   structure(
     list(
-      model_type   = model_type,
-      header_left  = header_left,
-      header_right = header_right,
-      coef_df      = coef_df,
-      stat_label   = stat_label,
-      wide         = wide,
-      family_label = family_label,
-      width        = width,
-      value_fmts   = value_fmts,
-      exp          = exp,
-      dep_var      = dep_var,
-      exp_label    = exp_label,
-      ancillary_df = ancillary_df,
-      level        = level
+      model_type     = model_type,
+      header_left    = header_left,
+      header_right   = header_right,
+      coef_df        = coef_df,
+      stat_label     = stat_label,
+      wide           = wide,
+      family_label   = family_label,
+      width          = width,
+      value_fmts     = value_fmts,
+      exp            = exp,
+      dep_var        = dep_var,
+      exp_label      = exp_label,
+      ancillary_df   = ancillary_df,
+      level          = level,
+      outcome_levels = outcome_levels
     ),
     class = "tula_output"
   )
@@ -450,6 +452,19 @@ print.tula_output <- function(x, ...) {
   }
 
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
+
+  # Ordered-model footer: lowest and highest outcome levels, truncated to fit.
+  if (!is.null(x$outcome_levels) && length(x$outcome_levels) >= 2L) {
+    lo  <- as.character(x$outcome_levels[1L])
+    hi  <- as.character(x$outcome_levels[length(x$outcome_levels)])
+    prefix  <- "Lowest level: "
+    sep_str <- ", Highest: "
+    avail <- total_width - nchar(prefix) - nchar(sep_str)
+    lo_w  <- max(4L, floor(avail / 2L))
+    hi_w  <- max(4L, avail - lo_w)
+    cat(prefix, .truncate_label(lo, lo_w), sep_str,
+        .truncate_label(hi, hi_w), "\n", sep = "")
+  }
 
   invisible(x)
 }
