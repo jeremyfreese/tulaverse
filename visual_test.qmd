@@ -341,75 +341,209 @@ tula(m_pois)
 
 ---
 
+# Quantile regression (quantreg::rq)
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  library(quantreg)
+} else {
+  cat("quantreg package not installed — quantile regression tests skipped.\n")
+}
+```
+
+## Test 26 — rq: median regression (tau = 0.5)
+
+**Expected:** Family label reads `"Median regression"`. Header left: Raw sum
+of dev, Min sum of dev, K-B Pseudo R2. Header right: Number of obs. Stat
+column is `t` / `P>|t|`. Default output includes 95% CI columns.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m26 <- rq(mpg ~ cyl + wt + hp, data = mtcars, tau = 0.5)
+  tula(m26)
+}
+```
+
+## Test 27 — rq: 90th quantile
+
+**Expected:** Family label reads `"90th Quantile regression"`.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m27 <- rq(mpg ~ cyl + wt + hp, data = mtcars, tau = 0.9)
+  tula(m27)
+}
+```
+
+## Test 28 — rq: 25th quantile
+
+**Expected:** Family label reads `"25th Quantile regression"`.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m28 <- rq(mpg ~ cyl + wt + hp, data = mtcars, tau = 0.25)
+  tula(m28)
+}
+```
+
+## Test 29 — rq: factor predictor
+
+**Expected:** `cyl` appears as a grouped factor header with indented levels.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m29 <- rq(mpg ~ factor(cyl) + wt, data = mtcars, tau = 0.5)
+  tula(m29)
+}
+```
+
+## Test 30 — rq: exp = TRUE
+
+**Expected:** Column headers change to `exp(b)` and `DMSE`. CIs suppressed.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  tula(m27, exp = TRUE)
+}
+```
+
+## Test 31 — rq: narrow output (wide = FALSE)
+
+**Expected:** No CI columns.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  tula(m26, wide = FALSE)
+}
+```
+
+## Test 32 — rqs: multiple quantiles (stacked layout)
+
+**Expected:** Shared header with N. One coefficient table per quantile, each
+with its own label (e.g. `"25th Quantile regression"`, `"Median regression"`,
+`"75th Quantile regression"`). Separated by dashed lines.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m32 <- rq(mpg ~ cyl + wt + hp, data = mtcars, tau = c(0.25, 0.5, 0.75))
+  tula(m32)
+}
+```
+
+## Test 33 — rqs: multiple quantiles (parallel layout)
+
+**Expected:** Side-by-side columns for each quantile. Coefficient on first
+line with significance stars, SE in parentheses on second line.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  tula(m32, parallel = TRUE)
+}
+```
+
+## Test 34 — rqs: five quantiles stacked
+
+**Expected:** Five blocks: 10th, 25th, 50th, 75th, 90th.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m34 <- rq(mpg ~ cyl + wt, data = mtcars,
+            tau = c(0.10, 0.25, 0.50, 0.75, 0.90))
+  tula(m34)
+}
+```
+
+## Test 35 — rqs: five quantiles parallel
+
+**Expected:** Five side-by-side columns. May require wide output.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  tula(m34, parallel = TRUE, width = 120)
+}
+```
+
+## Test 36 — rq: ref = TRUE with factor
+
+**Expected:** Reference-level row appears with `0` in Coef. column.
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  tula(m29, ref = TRUE)
+}
+```
+
+---
+
 # ref = TRUE — Reference level rows
 
-## Test 26 — Single factor, lm
+## Test 37 — Single factor, lm
 
 **Expected:** `ref = FALSE` (default) shows only non-reference levels (`6`, `8`).
 `ref = TRUE` adds a `4 (base)` row at the bottom of the `cyl` group with
 `0` in the Coef. column and blanks for SE, t, and P>|t|.
 
 ```{r}
-m26 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+m37 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
 cat("ref = FALSE (default):\n")
-tula(m26)
+tula(m37)
 cat("\nref = TRUE:\n")
-tula(m26, ref = TRUE)
+tula(m37, ref = TRUE)
 ```
 
-## Test 27 — Two factors, lm
+## Test 38 — Two factors, lm
 
 **Expected:** Each factor group gets its own `(base)` row. `cyl` base = `4`;
 `am` base = `0`.
 
 ```{r}
-m27 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
-tula(m27, ref = TRUE)
+m38 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+tula(m38, ref = TRUE)
 ```
 
-## Test 28 — glm with factor predictor
+## Test 39 — glm with factor predictor
 
 **Expected:** Reference row appears in the glm coefficient table just as in lm.
 Stat column is `z`; p-value column is `P>|z|`.
 
 ```{r}
-m28 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
-tula(m28, ref = TRUE)
+m39 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+tula(m39, ref = TRUE)
 ```
 
-## Test 29 — Three-level factor (iris)
+## Test 40 — Three-level factor (iris)
 
 **Expected:** `setosa` appears as the base row after `versicolor` and
 `virginica`.
 
 ```{r}
-m29 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
+m40 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
 cat("ref = FALSE (default):\n")
-tula(m29)
+tula(m40)
 cat("\nref = TRUE:\n")
-tula(m29, ref = TRUE)
+tula(m40, ref = TRUE)
 ```
 
-## Test 30 — Long factor labels (truncation check)
+## Test 41 — Long factor labels (truncation check)
 
 **Expected:** Factor level labels long enough to require truncation (`~`).
 The base-category row should truncate cleanly, and all rows must be the same
 width as the separator lines.
 
 ```{r}
-df30 <- mtcars
-df30$engine_type <- factor(
+df41 <- mtcars
+df41$engine_type <- factor(
   mtcars$cyl,
   levels = c(4, 6, 8),
   labels = c("Four-cylinder inline engine",
              "Six-cylinder inline engine",
              "Eight-cylinder V-type engine")
 )
-m30 <- lm(mpg ~ wt + engine_type, data = df30)
-tula(m30, ref = TRUE)
+m41 <- lm(mpg ~ wt + engine_type, data = df41)
+tula(m41, ref = TRUE)
 ```
 
-## Test 31 — Binary factor collapse
+## Test 42 — Binary factor collapse
 
 **Expected:** When a binary factor's non-reference level label matches the
 variable name (case-insensitively), the group-header row is suppressed and the
@@ -418,140 +552,140 @@ coefficient prints directly on the variable name row (no indentation).
 NOT collapse because the non-ref level is `treated` ≠ `treatment`.
 
 ```{r}
-df31 <- mtcars
-df31$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
+df42 <- mtcars
+df42$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
                     levels = c("female", "male"))
-df31$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
+df42$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
                          levels = c("control", "treated"))
-m31 <- lm(mpg ~ wt + male + treatment, data = df31)
+m42 <- lm(mpg ~ wt + male + treatment, data = df42)
 cat("Default (ref = FALSE) — 'male' collapses, 'treatment' does not:\n")
-tula(m31)
+tula(m42)
 cat("\nref = TRUE — collapse suppressed (male has 2 rows):\n")
-tula(m31, ref = TRUE)
+tula(m42, ref = TRUE)
 ```
 
 ---
 
 # label — Haven-style value labels
 
-## Test 32 — Factor levels already meaningful strings
+## Test 43 — Factor levels already meaningful strings
 
 **Expected:** `label = TRUE` and `label = FALSE` produce identical output when
 levels are already strings (e.g. `"Four"`, `"Six"`, `"Eight"`).
 
 ```{r}
-df32 <- mtcars
-df32$cyl_named <- factor(mtcars$cyl,
+df43 <- mtcars
+df43$cyl_named <- factor(mtcars$cyl,
                          levels = c(4, 6, 8),
                          labels = c("Four", "Six", "Eight"))
-m32 <- lm(mpg ~ cyl_named + wt, data = df32)
+m43 <- lm(mpg ~ cyl_named + wt, data = df43)
 cat("label = TRUE (default):\n")
-tula(m32, ref = TRUE, label = TRUE)
+tula(m43, ref = TRUE, label = TRUE)
 cat("\nlabel = FALSE:\n")
-tula(m32, ref = TRUE, label = FALSE)
+tula(m43, ref = TRUE, label = FALSE)
 ```
 
-## Test 33 — Haven-style value labels
+## Test 44 — Haven-style value labels
 
 **Expected:** When the data column carries a `labels` attribute (as produced
 by haven), `label = TRUE` substitutes numeric codes with text labels.
 `label = FALSE` shows raw numeric suffixes.
 
 ```{r}
-df33 <- mtcars
-df33$cyl_lbl <- mtcars$cyl
-attr(df33$cyl_lbl, "labels") <- c("Four cylinders" = 4,
+df44 <- mtcars
+df44$cyl_lbl <- mtcars$cyl
+attr(df44$cyl_lbl, "labels") <- c("Four cylinders" = 4,
                                    "Six cylinders"  = 6,
                                    "Eight cylinders" = 8)
-m33 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df33)
+m44 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df44)
 cat("label = TRUE (default) — shows full label text:\n")
-tula(m33, ref = TRUE, label = TRUE)
+tula(m44, ref = TRUE, label = TRUE)
 cat("\nlabel = FALSE — shows raw numeric suffixes:\n")
-tula(m33, ref = TRUE, label = FALSE)
+tula(m44, ref = TRUE, label = FALSE)
 ```
 
 ---
 
 # exp = TRUE — Exponentiated coefficients
 
-## Test 34 — lm, numeric predictors
+## Test 45 — lm, numeric predictors
 
 **Expected:** Column headers change to `exp(b)` and `DMSE`. Estimate column
 shows `exp(coef)`, SE column shows `exp(coef) * SE`. `t` and `P>|t|`
 unchanged. CIs suppressed.
 
 ```{r}
-m34 <- lm(mpg ~ cyl + wt, data = mtcars)
+m45 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("exp = FALSE (default):\n")
-tula(m34, wide = FALSE)
+tula(m45, wide = FALSE)
 cat("\nexp = TRUE:\n")
-tula(m34, exp = TRUE)
+tula(m45, exp = TRUE)
 ```
 
-## Test 35 — lm with factor and ref = TRUE
+## Test 46 — lm with factor and ref = TRUE
 
 **Expected:** Factor header row blank. Non-reference levels show exponentiated
 coefficients and DMSE. Reference-level row shows `1` instead of `0`.
 
 ```{r}
-m35 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
-tula(m35, exp = TRUE, ref = TRUE)
+m46 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+tula(m46, exp = TRUE, ref = TRUE)
 ```
 
-## Test 36 — glm logistic (odds ratios)
+## Test 47 — glm logistic (odds ratios)
 
 **Expected:** `exp(b)` produces odds ratios for logistic model. Compare with
 R's `exp(coef(m))`.
 
 ```{r}
-m36 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+m47 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
 cat("exp = TRUE (odds ratios):\n")
-tula(m36, exp = TRUE)
+tula(m47, exp = TRUE)
 cat("\nVerification — exp(coef):\n")
-print(exp(coef(m36)))
+print(exp(coef(m47)))
 ```
 
-## Test 37 — glm with factor and ref = TRUE
+## Test 48 — glm with factor and ref = TRUE
 
 **Expected:** Reference rows show `1`. Factor headers blank. Stat and p-value
 unchanged.
 
 ```{r}
-m37 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
-tula(m37, exp = TRUE, ref = TRUE)
+m48 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+tula(m48, exp = TRUE, ref = TRUE)
 ```
 
 ---
 
 # level — Confidence interval width
 
-## Test 38 — 90% vs 95% vs 99% CIs
+## Test 49 — 90% vs 95% vs 99% CIs
 
 **Expected:** CI bounds narrow at 90% and widen at 99%. Column header updates:
 `[90% Conf`, `[95% Conf`, `[99% Conf`. Point estimates, SEs, statistics, and
 p-values are identical across all three.
 
 ```{r}
-m38 <- lm(mpg ~ cyl + wt, data = mtcars)
+m49 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("level = 90:\n")
-tula(m38, level = 90)
+tula(m49, level = 90)
 cat("\nlevel = 95 (default):\n")
-tula(m38)
+tula(m49)
 cat("\nlevel = 99:\n")
-tula(m38, level = 99)
+tula(m49, level = 99)
 ```
 
-## Test 39 — Proportion input and error handling
+## Test 50 — Proportion input and error handling
 
 **Expected:** `level = 0.90` is treated the same as `level = 90` (auto-multiplied
 by 100). `level = 40` produces an error.
 
 ```{r}
 cat("level = 0.90 (same as 90):\n")
-tula(m38, level = 0.90)
+tula(m49, level = 0.90)
 cat("\nlevel = 40 (should error):\n")
 tryCatch(
-  tula(m38, level = 40),
+  tula(m49, level = 40),
   error = function(e) cat("Error caught:", conditionMessage(e), "\n")
 )
 ```
@@ -560,27 +694,27 @@ tryCatch(
 
 # wide / width — Display options
 
-## Test 40 — exp = TRUE suppresses CIs with a message
+## Test 51 — exp = TRUE suppresses CIs with a message
 
 **Expected:** A message is printed ("Note: wide output is not yet supported
 with exp = TRUE; CIs suppressed.") and the output has no CI columns.
 
 ```{r}
-m40 <- lm(mpg ~ cyl + wt, data = mtcars)
+m51 <- lm(mpg ~ cyl + wt, data = mtcars)
 cat("exp = TRUE, wide = TRUE (should message, suppress CIs):\n")
-tula(m40, exp = TRUE, wide = TRUE)
+tula(m51, exp = TRUE, wide = TRUE)
 ```
 
-## Test 41 — exp = TRUE with explicit wide = FALSE (no message)
+## Test 52 — exp = TRUE with explicit wide = FALSE (no message)
 
 **Expected:** No message about CIs when `wide = FALSE` is set explicitly.
 
 ```{r}
 cat("exp = TRUE, wide = FALSE (should NOT message):\n")
-tula(m40, exp = TRUE, wide = FALSE)
+tula(m51, exp = TRUE, wide = FALSE)
 ```
 
-## Test 42 — width below minimum (warning + clamp to 60)
+## Test 53 — width below minimum (warning + clamp to 60)
 
 **Expected:** A warning is issued ("width cannot be less than 60; using
 width = 60.") and the output is produced at width = 60.
@@ -597,47 +731,47 @@ withCallingHandlers(
 
 # Edge cases
 
-## Test 43 — Very small p-values
+## Test 54 — Very small p-values
 
 **Expected:** p-values below 0.0001 display as `<.0001`.
 
 ```{r}
-m43 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
-tula(m43)
+m54 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+tula(m54)
 ```
 
-## Test 44 — Single predictor (minimal model)
+## Test 55 — Single predictor (minimal model)
 
 **Expected:** Header and table format correctly with just one covariate row
 plus the intercept.
 
 ```{r}
-m44 <- lm(mpg ~ wt, data = mtcars)
-tula(m44)
+m55 <- lm(mpg ~ wt, data = mtcars)
+tula(m55)
 ```
 
-## Test 45 — Ordered factor as predictor
+## Test 56 — Ordered factor as predictor
 
 **Expected:** Ordered factors are treated the same as regular factors — grouped
 under a header row with indented levels.
 
 ```{r}
 mtcars$gear_o <- factor(mtcars$gear, ordered = TRUE)
-m45 <- lm(mpg ~ gear_o + wt, data = mtcars)
-tula(m45)
+m56 <- lm(mpg ~ gear_o + wt, data = mtcars)
+tula(m56)
 ```
 
-## Test 46 — glm with small sample (stress test)
+## Test 57 — glm with small sample (stress test)
 
 ```{r}
 iris_bin <- iris
 iris_bin$is_virginica <- as.integer(iris_bin$Species == "virginica")
-m46 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
+m57 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
            data = iris_bin, family = binomial)
-tula(m46)
+tula(m57)
 ```
 
-## Test 47 — Unsupported object type (error handling)
+## Test 58 — Unsupported object type (error handling)
 
 **Expected:** A clear, informative error message naming the unsupported class.
 
