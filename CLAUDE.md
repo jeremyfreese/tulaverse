@@ -10,8 +10,8 @@ It records architectural decisions and how-to patterns for this package.
 `tula()` is an S3 generic that produces Stata-style console output for two
 distinct input types:
 
-- **Regression models** (`lm`, `glm`, `multinom`, and future model types):
-  coefficient table with header block (fit statistics).
+- **Regression models** (`lm`, `glm`, `negbin`, `multinom`, `polr`, `clm`,
+  and future model types): coefficient table with header block (fit statistics).
 - **Data frames / vectors** (the "summarize path"): Stata `-summarize`-style
   descriptive statistics table.
 
@@ -25,7 +25,8 @@ distinct input types:
 | `R/tula_lm.R` | `tula.lm()` method |
 | `R/tula_glm.R` | `tula.glm()` method |
 | `R/tula_multinom.R` | `tula.multinom()` method |
-| `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `.truncate_label()`, row constructors |
+| `R/tula_negbin.R` | `tula.negbin()` method |
+| `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `format_ancillary_rows()`, `.truncate_label()`, row constructors |
 | `R/header.R` | `format_header()`, `compute_total_width()` |
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
@@ -144,6 +145,77 @@ wide <- .resolve_wide(wide, width)
 The message fires only when the user would have gotten CIs (explicit
 `wide = TRUE`, or `wide = NULL` which auto-resolves). When `wide = FALSE`
 is already explicit, no message is printed.
+
+---
+
+## Ancillary parameters (`ancillary_df`)
+
+Some model types estimate auxiliary parameters alongside the linear predictor
+(e.g., negative binomial dispersion). These are rendered at the bottom of the
+coefficient table, above the closing separator, each preceded by its own
+separator line (Stata convention).
+
+### The ancillary_df structure
+
+Five columns:
+
+```
+label      chr   Display label (e.g. "/lnalpha", "alpha")
+estimate   dbl   Point estimate
+std_err    dbl   Standard error
+ci_lower   dbl   Lower CI bound (NA if wide=FALSE)
+ci_upper   dbl   Upper CI bound (NA if wide=FALSE)
+```
+
+Ancillary rows show estimate + SE + blank z + blank p [+ CIs if wide].
+They are NOT affected by `exp = TRUE` — always display raw values.
+
+### Rendering
+
+`format_ancillary_rows()` in `coef_table.R` is called by `print.tula_output()`
+when `ancillary_df` is non-NULL. Lines are spliced before the final separator
+of the coefficient table. Each ancillary row is preceded by its own separator.
+
+### Adding ancillary parameters to a new model type
+
+Pass `ancillary_df = <data.frame>` to `new_tula_output()`. The rendering
+pipeline handles everything automatically. No changes to `format_coef_table()`
+or `print.tula_output()` are needed.
+
+---
+
+## `exp_label` — model-specific exponentiated column header
+
+Optional character scalar on `tula_output`. When `exp = TRUE` and `exp_label`
+is non-NULL, it replaces the default `"exp(b)"` column header. Examples:
+
+- Negative binomial: `"IRR"` (Incidence Rate Ratio)
+- Future: `"Odds Ratio"` for logistic, `"HR"` for Cox
+
+All existing methods pass `exp_label = NULL` (default), preserving the
+`"exp(b)"` header. Set conditionally in the method:
+`exp_label = if (isTRUE(exp)) "IRR" else NULL`.
+
+---
+
+## Negative binomial (`MASS::glm.nb`)
+
+### Key structural features
+
+- Class: `c("negbin", "glm", "lm")`. S3 dispatch finds `tula.negbin()` before
+  `tula.glm()`.
+- `summary()` gives standard glm-style coefficient table with z-values.
+- `model$theta`: R's NB dispersion parameter. Stata's `alpha = 1/theta`.
+- `model$SE.theta`: standard error of theta.
+- Ancillary parameters:
+  - `/lnalpha = -log(theta)`, SE via delta method: `SE(theta) / theta`
+  - `alpha = 1/theta = exp(lnalpha)`, SE via delta method: `alpha * SE(lnalpha)`
+  - CI for alpha = `exp(CI for lnalpha)` (asymmetric, correct)
+- McFadden R-sq: requires fitting a null intercept-only NB model via
+  `update(model, . ~ 1, trace = FALSE)` because theta differs between null
+  and fitted models.
+- `exp = TRUE` shows column header `"IRR"` via `exp_label`.
+- `exp` does NOT affect the ancillary section.
 
 ---
 

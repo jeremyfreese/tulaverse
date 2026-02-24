@@ -73,7 +73,7 @@
 #' @export
 tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                 digits = 7L, exp = FALSE, parallel = FALSE, ...) {
+                 digits = 7L, exp = FALSE, level = 95, parallel = FALSE, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -84,7 +84,7 @@ tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 #' @export
 tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                          width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                         digits = 7L, exp = FALSE, ...) {
+                         digits = 7L, exp = FALSE, level = 95, ...) {
   # Atomic vectors (numeric, integer, logical, character, factor) are routed
   # to the summarize path.  Matrices and other dimensioned objects are not
   # supported.
@@ -148,7 +148,10 @@ new_tula_output <- function(model_type,
                             width        = NULL,
                             value_fmts   = character(0L),
                             exp          = FALSE,
-                            dep_var      = NULL) {
+                            dep_var      = NULL,
+                            exp_label    = NULL,
+                            ancillary_df = NULL,
+                            level        = 95) {
   structure(
     list(
       model_type   = model_type,
@@ -161,7 +164,10 @@ new_tula_output <- function(model_type,
       width        = width,
       value_fmts   = value_fmts,
       exp          = exp,
-      dep_var      = dep_var
+      dep_var      = dep_var,
+      exp_label    = exp_label,
+      ancillary_df = ancillary_df,
+      level        = level
     ),
     class = "tula_output"
   )
@@ -198,6 +204,22 @@ new_tula_output <- function(model_type,
   w >= 80L
 }
 
+# Resolve and validate the confidence interval level.
+# - If level < 1, multiply by 100 (so 0.95 → 95).
+# - After normalisation, must be between 50 and 99.9 (inclusive).
+# Returns the percentage (e.g. 95, 90, 99.9).
+.resolve_level <- function(level) {
+  if (!is.numeric(level) || length(level) != 1L || is.na(level)) {
+    stop("level must be a single numeric value.", call. = FALSE)
+  }
+  if (level < 1) level <- level * 100
+  if (level < 50 || level > 99.9) {
+    stop("level must be between 50 and 99.9 (or equivalently 0.50 to 0.999).",
+         call. = FALSE)
+  }
+  level
+}
+
 
 # ---------------------------------------------------------------------------
 # Internal constructor for tula_multinom_output S3 objects.
@@ -223,7 +245,8 @@ new_tula_multinom_output <- function(header_left,
                                      value_fmts = character(0L),
                                      exp        = FALSE,
                                      parallel   = FALSE,
-                                     dep_var    = NULL) {
+                                     dep_var    = NULL,
+                                     level      = 95) {
   structure(
     list(
       header_left  = header_left,
@@ -236,7 +259,8 @@ new_tula_multinom_output <- function(header_left,
       value_fmts   = value_fmts,
       exp          = exp,
       parallel     = parallel,
-      dep_var      = dep_var
+      dep_var      = dep_var,
+      level        = level
     ),
     class = "tula_multinom_output"
   )
@@ -332,7 +356,9 @@ print.tula_multinom_output <- function(x, ...) {
       blk <- x$blocks[[i]]
       table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
                                        total_width = total_width,
-                                       exp = isTRUE(x$exp))
+                                       exp       = isTRUE(x$exp),
+                                       exp_label = x$exp_label,
+                                       level     = x$level %||% 95L)
       # Drop first sep (replaced by sep_line below) and last sep (printed
       # manually after the loop so there is always a final separator before
       # the "Base outcome:" footer).
@@ -370,10 +396,14 @@ print.tula_output <- function(x, ...) {
   max_w <- .resolve_width(x$width)
   vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
+  # Include ancillary labels (if any) in width computation
+  anc_labels <- if (!is.null(x$ancillary_df)) x$ancillary_df$label else character(0)
+  all_labels <- c(x$coef_df$label, anc_labels)
+
   natural_width <- compute_total_width(
     header_left  = x$header_left,
     header_right = x$header_right,
-    coef_labels  = x$coef_df$label,
+    coef_labels  = all_labels,
     wide         = x$wide,
     value_fmts   = vf
   )
@@ -391,9 +421,12 @@ print.tula_output <- function(x, ...) {
   cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
 
   # Coefficient table
+  lv <- x$level %||% 95L
   table_lines <- format_coef_table(x$coef_df, x$stat_label, x$wide,
                                    total_width = total_width,
-                                   exp = isTRUE(x$exp))
+                                   exp       = isTRUE(x$exp),
+                                   exp_label = x$exp_label,
+                                   level     = lv)
 
   # Embed the dependent variable name in the label-column area of the column
   # header row (table_lines[2]), mirroring the multinom outcome-label pattern.
@@ -405,6 +438,15 @@ print.tula_output <- function(x, ...) {
     hdr_line        <- table_lines[2L]
     table_lines[2L] <- paste0(pad_right(dep_lbl, lbl_w),
                               substring(hdr_line, lbl_w + 1L))
+  }
+
+  # Splice ancillary parameter rows (if any) before the final separator.
+  # table_lines ends with a separator; pop it, add ancillary lines, re-append.
+  if (!is.null(x$ancillary_df) && nrow(x$ancillary_df) > 0L) {
+    anc_lines <- format_ancillary_rows(x$ancillary_df, x$wide, total_width,
+                                       level = lv)
+    n_tl <- length(table_lines)
+    table_lines <- c(table_lines[-n_tl], anc_lines, table_lines[n_tl])
   }
 
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")

@@ -1,7 +1,8 @@
 #' @rdname tula
 #' @export
 tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                      width = NULL, exp = FALSE, ...) {
+                      width = NULL, exp = FALSE, level = 95, ...) {
+  level <- .resolve_level(level)
   # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
   if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
     message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
@@ -46,7 +47,7 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # Wald confidence intervals via vcov (covers both predictors and cutpoints)
   if (wide) {
     v      <- stats::vcov(model)   # full var-cov for all params
-    z_crit <- stats::qnorm(0.975)
+    z_crit <- stats::qnorm(0.5 + level / 200)
     ses    <- sqrt(diag(v))
 
     ci_pred <- cbind(
@@ -139,6 +140,7 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     width        = width,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
     exp          = exp,
-    dep_var      = dep_var
+    dep_var      = dep_var,
+    level        = level
   )
 }

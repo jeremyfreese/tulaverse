@@ -1,7 +1,9 @@
 #' @rdname tula
 #' @export
 tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                          width = NULL, exp = FALSE, parallel = FALSE, ...) {
+                          width = NULL, exp = FALSE, level = 95,
+                          parallel = FALSE, ...) {
+  level <- .resolve_level(level)
   # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
   if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
     message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
@@ -38,7 +40,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # the per-block extraction code below works uniformly.
   ci_arr <- if (wide) {
     tryCatch({
-      ci_raw <- confint(model)
+      ci_raw <- confint(model, level = level / 100)
       if (is.matrix(ci_raw)) {
         # Binary case: reshape [P x 2] -> [P x 2 x 1] named by the one non-base level
         array(ci_raw, dim = c(nrow(ci_raw), 2L, 1L),
@@ -127,7 +129,8 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
     exp          = exp,
     parallel     = isTRUE(parallel),
-    dep_var      = dep_var
+    dep_var      = dep_var,
+    level        = level
   )
 }
 

@@ -1,7 +1,8 @@
 #' @rdname tula
 #' @export
 tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                     width = NULL, exp = FALSE, ...) {
+                     width = NULL, exp = FALSE, level = 95, ...) {
+  level <- .resolve_level(level)
   # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
   if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
     message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
@@ -51,7 +52,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   # Use Wald CIs (confint.default) for speed; avoids slow profile likelihood
   # and matches Stata's default for logistic/Poisson regression
-  ci <- if (wide) stats::confint.default(model) else NULL
+  ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
 
   opts    <- .parse_tula_opts(ref, label)
   coef_df <- build_coef_df(model, ct, ci, wide, ref = opts$ref, label = opts$label)
@@ -74,6 +75,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     width        = width,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
     exp          = exp,
-    dep_var      = dep_var
+    dep_var      = dep_var,
+    level        = level
   )
 }

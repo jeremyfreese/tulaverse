@@ -546,7 +546,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'
 #' @return Character vector, one element per line.
 format_coef_table <- function(coef_df, stat_label, wide, total_width,
-                              exp = FALSE) {
+                              exp = FALSE, exp_label = NULL, level = 95) {
   # Fixed numeric column widths.
   # stat is 10 (was 8) so values like "-5.08e+06" don't overflow.
   # pval is 9 (was 8) for a little more breathing room around "P>|z|".
@@ -569,19 +569,24 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   pval_hdr <- if (stat_label == "z") "P>|z|" else "P>|t|"
 
   # Column header labels: change when exp = TRUE
-  coef_hdr <- if (exp) "exp(b)" else "Coef."
+  coef_hdr <- if (exp) (exp_label %||% "exp(b)") else "Coef."
   se_hdr   <- if (exp) "DMSE"   else "Std. Err."
+
+  # CI column header: format level as integer when it has no fractional part
+  # (e.g. 95 → "[95% Conf", 99.9 → "[99.9% Conf")
+  ci_pct  <- if (level == as.integer(level)) as.integer(level) else level
+  ci_hdr1 <- paste0("[", ci_pct, "% Conf")
 
   # Build column header line
   if (wide) {
     hdr <- sprintf(
       "%s |%s %s %s %s %s %s",
       pad_right("", lbl_w),
-      pad_left(coef_hdr,    cw_coef),
-      pad_left(se_hdr,      cw_se),
-      pad_left(stat_label,  cw_stat),
-      pad_left(pval_hdr,    cw_pval),
-      pad_left("[95% Conf", cw_ci),
+      pad_left(coef_hdr,   cw_coef),
+      pad_left(se_hdr,     cw_se),
+      pad_left(stat_label, cw_stat),
+      pad_left(pval_hdr,   cw_pval),
+      pad_left(ci_hdr1,    cw_ci),
       pad_left("Interval]", cw_ci)
     )
   } else {
@@ -684,5 +689,74 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   }
 
   lines <- c(lines, sep)
+  lines
+}
+
+
+#' @keywords internal
+#'
+#' Format ancillary parameter rows for the bottom of the coefficient table.
+#'
+#' Some model types estimate auxiliary parameters alongside the linear
+#' predictor (e.g., negative binomial dispersion). These are rendered below
+#' the main coefficient rows, inside the same table frame, each preceded by
+#' its own separator line (Stata convention).
+#'
+#' Ancillary rows show estimate + SE + blank z + blank p \[+ CIs if wide\].
+#' They are NOT affected by `exp = TRUE` — always display raw values.
+#'
+#' @param ancillary_df Data frame with columns: label, estimate, std_err,
+#'   ci_lower, ci_upper. CIs may be NA when wide = FALSE.
+#' @param wide Logical. Whether CI columns are displayed.
+#' @param total_width Integer. Total output line width (must match the
+#'   coefficient table width).
+#' @return Character vector of lines (separator + row pairs).
+format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
+  cw_coef <- 10L
+  cw_se   <- 10L
+  cw_stat <- 10L
+  cw_pval <-  9L
+  cw_ci   <- 10L
+
+  num_cols_w <- 2L + cw_coef + 1L + cw_se + 1L + cw_stat + 1L + cw_pval
+  if (wide) num_cols_w <- num_cols_w + 1L + cw_ci + 1L + cw_ci
+
+  lbl_w <- total_width - num_cols_w
+  sep   <- char_rep("-", total_width)
+
+  blank_stat <- strrep(" ", cw_stat)
+  blank_pval <- strrep(" ", cw_pval)
+
+  lines <- character(0L)
+
+  for (i in seq_len(nrow(ancillary_df))) {
+    row     <- ancillary_df[i, ]
+    lbl     <- .truncate_label(row$label, lbl_w)
+    lbl_fmt <- pad_right(lbl, lbl_w)
+
+    if (wide) {
+      line <- sprintf(
+        "%s |%s %s %s %s %s %s",
+        lbl_fmt,
+        fmt_num(row$estimate, width = cw_coef),
+        fmt_num(row$std_err,  width = cw_se),
+        blank_stat,
+        blank_pval,
+        fmt_num(row$ci_lower, width = cw_ci),
+        fmt_num(row$ci_upper, width = cw_ci)
+      )
+    } else {
+      line <- sprintf(
+        "%s |%s %s %s %s",
+        lbl_fmt,
+        fmt_num(row$estimate, width = cw_coef),
+        fmt_num(row$std_err,  width = cw_se),
+        blank_stat,
+        blank_pval
+      )
+    }
+    lines <- c(lines, sep, line)
+  }
+
   lines
 }
