@@ -50,7 +50,7 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # --- Family label ---------------------------------------------------------
   family_label <- paste0("Family: Negative Binomial / Link: ", model$family$link)
 
-  # --- Ancillary parameters (Stata-style /lnalpha and alpha) ----------------
+  # --- Ancillary parameters (Stata-inspired /lnalpha and alpha) ----------------
   # R's theta = 1/alpha (Stata convention).
   theta    <- model$theta
   se_theta <- model$SE.theta

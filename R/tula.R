@@ -1,16 +1,23 @@
-#' Print Stata-Style Regression Output
+#' Stata-Inspired Regression and Summary Output
 #'
-#' `tula()` prints regression output formatted to resemble Stata's regression
-#' output, with a two-block header (model fit statistics on the left, sample
-#' statistics on the right) and a coefficient table with optional confidence
-#' intervals.
+#' `tula()` is an S3 generic that produces Stata-inspired console output for
+#' two distinct input types: regression models (coefficient table with header
+#' block) and data frames or vectors (descriptive statistics table).
 #'
-#' Factor variables are displayed Stata-style: the variable name appears on
-#' its own header row, and each non-reference level is indented below it.
-#' The intercept is always placed last, separated from the other coefficients
-#' by a horizontal line.
+#' For regression models, the output includes a two-block header (model fit
+#' statistics on the left, sample statistics on the right) and a coefficient
+#' table with optional confidence intervals. Factor variables are grouped:
+#' the variable name appears on its own header row, and each non-reference
+#' level is indented below it. The intercept is always placed last.
 #'
-#' @param model A fitted model object. Currently supported: `lm`, `glm`.
+#' @param model A fitted model object or a data frame / vector. Supported
+#'   model classes: `lm`, `glm`, `negbin` (negative binomial via
+#'   [MASS::glm.nb()]), `multinom` (multinomial logit via [nnet::multinom()]),
+#'   `polr` (ordered regression via [MASS::polr()]), `clm` (ordered regression
+#'   via [ordinal::clm()]), `coxph` (Cox proportional hazards via
+#'   [survival::coxph()]), `rq` and `rqs` (quantile regression via
+#'   [quantreg::rq()]). When passed a data frame or atomic vector, produces
+#'   descriptive statistics output.
 #' @param wide Logical or `NULL`. If `TRUE`, 95% confidence interval columns
 #'   are added. If `FALSE`, they are omitted. If `NULL` (the default),
 #'   confidence intervals are shown automatically when the effective output
@@ -50,8 +57,20 @@
 #'   and p-value are unchanged. Reference-level rows show `1` instead of `0`.
 #'   When `wide = TRUE`, CI bounds are also exponentiated.
 #'   Default `FALSE`. Ignored for summarize output.
-#' @param ... Additional arguments passed to model-specific methods (reserved
-#'   for future extensions).
+#' @param level Numeric. Confidence interval width as a percentage (e.g. 90,
+#'   95, 99). Values less than 1 are multiplied by 100 (so `0.95` becomes 95).
+#'   Default 95. Ignored for summarize output.
+#' @param parallel Logical. For multinomial logit and multi-quantile models:
+#'   if `TRUE`, outcomes/quantiles are shown as side-by-side columns with
+#'   significance stars instead of stacked blocks. Default `FALSE`.
+#' @param robust Logical. If `TRUE`, heteroskedasticity-robust (HC3) standard
+#'   errors are used. Requires the `sandwich` package. Default `FALSE`.
+#' @param vcov Character or matrix. When a character string (e.g. `"HC4"`),
+#'   specifies the HC type for robust SEs. When a matrix, used directly as
+#'   the variance-covariance matrix. Default `NULL`.
+#' @param cluster Character. Variable name for cluster-robust standard errors.
+#'   Implies `robust = TRUE`. Default `NULL`.
+#' @param ... Additional arguments passed to model-specific methods.
 #'
 #' @return For regression models, invisibly returns a `tula_output` object.
 #'   For data frames and vectors, invisibly returns a `tula_summary` object.
@@ -275,7 +294,7 @@ new_tula_multinom_output <- function(header_left,
 
 #' Print method for tula_multinom_output objects
 #'
-#' Prints Stata-style multinomial logit output: a shared header block,
+#' Prints Stata-inspired multinomial logit output: a shared header block,
 #' then one coefficient table per non-base outcome separated by dashed
 #' lines, then a "Base outcome:" footer line. Each outcome label appears
 #' on the same line as the column headers (Coef, Std. Err., etc.),
@@ -317,7 +336,7 @@ print.tula_multinom_output <- function(x, ...) {
     total_width <- min(natural_width, max_w)
   }
 
-  sep_line <- char_rep("-", total_width)
+  sep_line <- char_rep(.BOX_H, total_width)
 
   # Derive the label-column width (mirrors format_coef_table internals).
   # num_cols_w: " |"(2) + coef(10) sp(1) + se(10) sp(1) + stat(10) sp(1) + pval(9)
@@ -390,7 +409,7 @@ print.tula_multinom_output <- function(x, ...) {
 
 #' Print method for tula_output objects
 #'
-#' Assembles and prints the full Stata-style output. Called automatically
+#' Assembles and prints the full Stata-inspired output. Called automatically
 #' when a `tula_output` object is returned to the console.
 #'
 #' @param x A `tula_output` object (from `tula()`).

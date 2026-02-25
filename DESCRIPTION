@@ -1,14 +1,18 @@
 Package: tula
 Type: Package
-Title: Stata-Style Regression Output for R Models
+Title: Stata-Inspired Console Output and Visualization for R
 Version: 0.1.0
-Authors@R: person("Author", "Name", email = "email@example.com",
+Authors@R: person("Jeremy", "Freese", email = "jfreese@stanford.edu",
                   role = c("aut", "cre"))
-Description: Provides tula(), which prints regression output formatted to
-    resemble Stata's regression output. Includes a two-block header with
-    model fit statistics, a coefficient table with factor variable grouping,
-    and an optional confidence interval column. Supports lm() and glm()
-    with an extensible S3 dispatch architecture for future model types.
+Description: Provides Stata-inspired console output for regression models,
+    descriptive statistics, and frequency tables. The tula() function produces
+    formatted regression output — including a model fit header and coefficient
+    table with factor variable grouping — for a wide range of model types
+    (lm, glm, negative binomial, ordered regression, multinomial logit, Cox
+    proportional hazards, and quantile regression). The tulatab() function
+    produces one-way frequency tables and two-way crosstabulations with
+    optional means. Plotting functions (tulaplot(), theme_tula()) provide
+    ggplot2 integration with defaults closer to those used by Stata.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

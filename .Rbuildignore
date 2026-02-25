@@ -1,0 +1,5 @@
+^.*\.qmd$
+^.*\.html$
+^.*_files$
+^CLAUDE\.md$
+^\.Rbuildignore$

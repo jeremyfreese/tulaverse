@@ -208,3 +208,85 @@ Values in ascending order.
 ```{r}
 tulatab(mtcars$mpg)
 ```
+
+## Test 17 — One-way mean= with numeric row variable (NSE)
+
+**Expected:** Mean and N columns replace Freq/Percent/Cum.
+Shows mean mpg for each cyl value (4, 6, 8) plus Total row.
+
+```{r}
+tulatab(cyl, data = mtcars, mean = mpg)
+```
+
+## Test 18 — One-way mean= with factor row variable
+
+**Expected:** Factor levels shown with mean mpg and N per level.
+
+```{r}
+tulatab(factor(mtcars$cyl), mean = mtcars$mpg)
+```
+
+## Test 19 — One-way mean= with direct vectors
+
+**Expected:** Same as Test 17 but using direct vector syntax.
+
+```{r}
+tulatab(mtcars$cyl, mean = mtcars$mpg)
+```
+
+## Test 20 — One-way mean= with sort=TRUE
+
+**Expected:** Rows sorted by descending frequency. Mean and N columns.
+
+```{r}
+tulatab(cyl, data = mtcars, mean = mpg, sort = TRUE)
+```
+
+## Test 21 — One-way mean= with NAs in mean variable
+
+**Expected:** N reflects non-missing count of mpg only.
+Some rows may have reduced N.
+
+```{r}
+mtcars_na <- mtcars
+mtcars_na$mpg[c(1, 5, 10, 15, 20)] <- NA
+tulatab(cyl, data = mtcars_na, mean = mpg)
+```
+
+## Test 22 — One-way mean= with character row variable
+
+**Expected:** Character categories with mean and N columns.
+
+```{r}
+colors <- c(rep("red", 10), rep("blue", 15), rep("green", 5))
+vals   <- c(rnorm(10, 5), rnorm(15, 10), rnorm(5, 7))
+set.seed(42)
+vals   <- round(c(rnorm(10, 5), rnorm(15, 10), rnorm(5, 7)), 2)
+tulatab(colors, mean = vals)
+```
+
+## Test 23 — One-way mean= with missing=TRUE
+
+**Expected:** Includes NA row with its own mean and N.
+
+```{r}
+x_miss <- c(1, 1, 2, 2, 3, 3, NA, NA)
+m_miss <- c(10, 20, 30, 40, 50, 60, 70, 80)
+tulatab(x_miss, mean = m_miss, missing = TRUE)
+```
+
+## Test 24 — One-way mean= non-numeric error
+
+**Expected:** Error message about mean variable must be numeric.
+
+```{r, error=TRUE}
+tulatab(cyl, data = mtcars, mean = gear > 3)
+```
+
+## Test 25 — One-way mean= length mismatch error
+
+**Expected:** Error about length mismatch.
+
+```{r, error=TRUE}
+tulatab(mtcars$cyl, mean = 1:10)
+```

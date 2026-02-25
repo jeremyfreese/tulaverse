@@ -182,3 +182,144 @@ tulatab(mtcars$vs, mtcars$cyl, pct = "row", freq = FALSE)
 ```{r}
 tulatab(mtcars$vs, mtcars$cyl, pct = "cell", freq = FALSE)
 ```
+
+## Test 23 — by= with numeric grouping variable (NSE)
+
+```{r}
+tulatab(vs, cyl, data = mtcars, by = am)
+```
+
+## Test 24 — by= with factor grouping variable
+
+```{r}
+df_by <- data.frame(
+  outcome = factor(c("pass","fail","pass","fail","pass","pass","fail","pass",
+                      "fail","pass","pass","fail"),
+                   levels = c("pass","fail")),
+  method  = factor(c("A","B","A","B","A","B","A","B","A","B","A","B"),
+                   levels = c("A","B")),
+  group   = factor(c("ctrl","ctrl","ctrl","ctrl","ctrl","ctrl",
+                      "treat","treat","treat","treat","treat","treat"),
+                   levels = c("ctrl","treat"))
+)
+tulatab(outcome, method, data = df_by, by = group)
+```
+
+## Test 25 — by= with row percentages
+
+```{r}
+tulatab(vs, cyl, data = mtcars, by = am, pct = "row")
+```
+
+## Test 26 — by= with missing in the by-variable
+
+```{r}
+df_bymiss <- data.frame(
+  y = factor(c("a","b","a","b","a","b","a","b","a","b"),
+             levels = c("a","b")),
+  x = factor(c("X","Y","X","Y","X","Y","X","Y","X","Y"),
+             levels = c("X","Y")),
+  g = factor(c("m","m","f","f","m", NA, "f", NA, "m","f"),
+             levels = c("f","m"))
+)
+tulatab(y, x, data = df_bymiss, by = g, missing = TRUE)
+```
+
+## Test 27 — by= with haven-labelled grouping variable
+
+```{r}
+library(haven)
+trust <- labelled(
+  c(0,0,0,1,1,0,0,1,0,1,0,0,0,1,0,1,0,0,1,0),
+  labels = c("no" = 0, "yes" = 1),
+  label = "can people be trusted"
+)
+degree <- labelled(
+  c(1,2,3,1,2,4,5,3,2,4,1,5,2,3,4,1,2,5,3,4),
+  labels = c("less than high school" = 1, "high school diploma" = 2,
+             "associate/junior college" = 3, "bachelor's degree" = 4,
+             "graduate degree" = 5),
+  label = "r's highest degree"
+)
+sex <- labelled(
+  c(1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2),
+  labels = c("male" = 1, "female" = 2),
+  label = "respondent's sex"
+)
+tulatab(trust, degree, by = sex)
+```
+
+## Test 28 — by= with sort
+
+```{r}
+tulatab(vs, cyl, data = mtcars, by = am, sort = TRUE)
+```
+
+## Test 29 — by= with freq=FALSE
+
+```{r}
+tulatab(vs, cyl, data = mtcars, by = am, freq = FALSE)
+```
+
+## Test 30 — mean= basic (NSE)
+
+Mean of mpg by cyl × am. Each cell shows mean on top, N on bottom.
+
+```{r}
+tulatab(cyl, am, data = mtcars, mean = mpg)
+```
+
+## Test 31 — mean= with direct vectors
+
+```{r}
+tulatab(mtcars$cyl, mtcars$am, mean = mtcars$mpg)
+```
+
+## Test 32 — mean= with by=
+
+Separate mean tables per vs level.
+
+```{r}
+tulatab(cyl, am, data = mtcars, mean = mpg, by = vs)
+```
+
+## Test 33 — mean= with NAs in the mean variable
+
+N should reflect only non-missing values.
+
+```{r}
+d <- mtcars
+d$mpg2 <- d$mpg
+d$mpg2[c(1, 5, 10, 15, 20, 25)] <- NA
+tulatab(cyl, am, data = d, mean = mpg2)
+```
+
+## Test 34 — mean= with sort=TRUE
+
+Rows and columns sorted by descending marginal counts.
+
+```{r}
+tulatab(cyl, am, data = mtcars, mean = mpg, sort = TRUE)
+```
+
+## Test 35 — mean= silently ignores pct and freq
+
+Setting pct="row" and freq=FALSE should have no effect when mean= is specified.
+
+```{r}
+tulatab(cyl, am, data = mtcars, mean = mpg, pct = "row", freq = FALSE)
+```
+
+## Test 36 — mean= one-way mode error
+
+```{r, error=TRUE}
+tulatab(cyl, data = mtcars, mean = mpg)
+```
+
+## Test 37 — mean= non-numeric error
+
+```{r, error=TRUE}
+d <- mtcars
+d$carname <- rownames(mtcars)
+tulatab(cyl, am, data = d, mean = carname)
+```

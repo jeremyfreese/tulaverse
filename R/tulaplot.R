@@ -19,10 +19,10 @@
 )
 
 
-#' Create a ggplot with Stata-style defaults
+#' Create a ggplot with Stata-inspired defaults
 #'
 #' A thin wrapper around [ggplot2::ggplot()] that automatically applies
-#' [theme_tula()] for Stata-style appearance with larger text. The returned
+#' [theme_tula()] for Stata-inspired appearance with larger text. The returned
 #' object is a standard ggplot and can be modified with any ggplot2 function.
 #' Any subsequent theme settings added by the user silently override the
 #' defaults.
@@ -53,7 +53,7 @@ tulaplot <- function(data = NULL, mapping = ggplot2::aes(), ...,
 }
 
 
-#' Stata-style ggplot2 theme with larger text
+#' Stata-inspired ggplot2 theme with larger text
 #'
 #' A complete ggplot2 theme inspired by Stata 18's `stcolor` graph scheme:
 #' white backgrounds, light gray dashed grid lines, black axis lines, and

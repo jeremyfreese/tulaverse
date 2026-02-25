@@ -1,0 +1,12 @@
+# R build artifacts
+*.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+
+# Rendered output from test scripts
+*.html
+*_files/
+
+# Mac OS
+.DS_Store

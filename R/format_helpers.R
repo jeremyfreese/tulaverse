@@ -1,3 +1,11 @@
+# --- Box-drawing characters ------------------------------------------------
+# Unicode box-drawing characters for smooth table borders.
+# To revert to ASCII, change these three lines to:  "-", "|", "+"
+.BOX_H     <- "\u2500"   # ─  horizontal line
+.BOX_V     <- "\u2502"   # │  vertical line
+.BOX_CROSS <- "\u253C"   # ┼  intersection / junction
+
+
 #' @keywords internal
 #'
 #' Strip the leading zero from a formatted numeric string.

@@ -403,7 +403,7 @@ new_tula_rqs_output <- function(header_left,
 
 #' Print method for tula_rqs_output objects
 #'
-#' Prints Stata-style quantile regression output for multiple quantiles:
+#' Prints Stata-inspired quantile regression output for multiple quantiles:
 #' a shared header, then one coefficient table per quantile separated by
 #' dashed lines. Each quantile label appears on the column-header line.
 #'
@@ -437,7 +437,7 @@ print.tula_rqs_output <- function(x, ...) {
     total_width <- min(natural_width, max_w)
   }
 
-  sep_line <- char_rep("-", total_width)
+  sep_line <- char_rep(.BOX_H, total_width)
 
   num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L
   if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L

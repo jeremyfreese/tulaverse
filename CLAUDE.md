@@ -52,9 +52,9 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
 | `R/robust.R` | `.resolve_robust_vcov()`, `.recompute_ct_robust()`, `.robust_ci()` |
-| `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `new_tula_crosstab()`, `print.tula_crosstab()`, `.extract_var_name()` |
-| `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.truncate_tab_label()` |
-| `R/crosstab_helpers.R` | `.build_crosstab()`, `.crosstab_display_levels()`, `.format_crosstab_table()`, `.render_crosstab_panel()`, `.wrap_row_header()`, `.wrap_col_label()`, `.compute_crosstab_pct()` |
+| `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `new_tula_crosstab()`, `print.tula_crosstab()`, `new_tula_crosstab_by()`, `print.tula_crosstab_by()`, `.extract_var_name()` |
+| `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.format_tab_mean_table()`, `.compute_oneway_means()`, `.truncate_tab_label()` |
+| `R/crosstab_helpers.R` | `.build_crosstab()`, `.build_mean_crosstab()`, `.crosstab_display_levels()`, `.format_crosstab_table()`, `.render_crosstab_panel()`, `.wrap_row_header()`, `.wrap_col_label()`, `.compute_crosstab_pct()`, `.crosstab_by_levels()` |
 
 ---
 
@@ -550,6 +550,10 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 | `mad` | FALSE | summarize | Show MAD instead of SD |
 | `median` | FALSE | summarize | Show median/IQR instead of mean/SD |
 | `digits` | 7L | summarize | Significant digits (avoids sci notation to ~10M) |
+| `pct` | `"col"` | crosstab | `"col"`, `"row"`, `"cell"`, or `NULL` (no percentages) |
+| `freq` | `TRUE` | crosstab | Show frequency counts |
+| `mean` | `NULL` | crosstab | Numeric variable; replaces freq+pct with cell means + Ns |
+| `by` | `NULL` | crosstab | Grouping variable; produces separate panels per level |
 
 The summarize path also caps decimal places at 3 for `|x| > 0.1` via `.fmt_sum()`.
 
@@ -951,6 +955,231 @@ right-aligned within `cw_data`. Truncated with `~` if needed.
 
 When `sort=TRUE`, rows sorted by descending row marginals, columns by
 descending column marginals. Missing categories always sort to the end.
+
+---
+
+## Grouped crosstabs (`by=` parameter)
+
+When `by` is supplied in two-way mode, `tulatab()` produces a separate
+crosstab for each level of the grouping variable.
+
+### Calling conventions
+
+```r
+tulatab(vs, cyl, data = mtcars, by = am)          # NSE
+tulatab(mtcars$vs, mtcars$cyl, by = mtcars$am)    # direct vectors
+```
+
+`by` is only supported in two-way mode. Passing `by` in one-way mode
+produces an error.
+
+### Panel headers
+
+Each by-level panel is preceded by a `-> header` line. The header format
+depends on the by-variable type:
+
+| Type | Header format |
+|------|---------------|
+| Factor / character | `by_display = level` |
+| Numeric | `by_display = value` |
+| Haven labelled | `by_display = code [label]` |
+| Missing (NA) | `by_display = .` |
+
+`by_display` is the haven variable label (if present) or the variable name.
+
+### S3 object: tula_crosstab_by
+
+```r
+list(
+  panels       = list(       # one entry per by-level
+    list(by_header = "am = 0", ct = <tula_crosstab>),
+    list(by_header = "am = 1", ct = <tula_crosstab>)
+  ),
+  by_name      = "am",
+  by_var_label = NULL,       # haven variable label or NULL
+  width        = NULL
+)
+```
+
+Each `ct` element is a standard `tula_crosstab` object, rendered by
+`.format_crosstab_table()`. The `print.tula_crosstab_by()` method loops
+over panels, printing the header then the crosstab for each.
+
+### Pipeline
+
+```
+tulatab(y, x, data = df, by = g)
+  ├─ resolve y, x, by via NSE
+  ├─ .crosstab_by_levels(by_vec, ...) → level_keys, level_headers, key_vec
+  └─ for each by-level:
+       ├─ subset y_vec, x_vec by mask
+       ├─ .build_crosstab(y_sub, x_sub, ...)
+       └─ new_tula_crosstab(...)
+  └─ new_tula_crosstab_by(panels, ...)
+       └─ print.tula_crosstab_by()
+            └─ for each panel: print header + .format_crosstab_table()
+```
+
+### Missing in by-variable
+
+When `missing = TRUE`, NA values in the by-variable get their own panel
+with header `"by_display = ."`. When `missing = FALSE` (default), observations
+with NA in the by-variable are excluded.
+
+### Haven attribute preservation
+
+When subsetting `y_vec[mask]` or `x_vec[mask]` for haven-labelled variables,
+the `labels`, `label`, and `class` attributes are explicitly preserved to
+ensure `.crosstab_display_levels()` works correctly on the subset.
+
+### Empty by-groups
+
+Factor by-variables with unused levels (zero observations for a level) are
+silently skipped — no empty panels are produced.
+
+---
+
+## Mean mode (`mean=` parameter)
+
+When `mean` is supplied, `tulatab()` replaces the default frequency +
+percentage display with the mean and non-missing N of a numeric variable.
+Works in both one-way and two-way mode.
+
+### Calling conventions
+
+```r
+# One-way mean mode
+tulatab(cyl, data = mtcars, mean = mpg)              # NSE
+tulatab(mtcars$cyl, mean = mtcars$mpg)               # direct vectors
+
+# Two-way mean mode
+tulatab(cyl, am, data = mtcars, mean = mpg)          # NSE
+tulatab(mtcars$cyl, mtcars$am, mean = mtcars$mpg)    # direct vectors
+tulatab(cyl, am, data = mtcars, mean = mpg, by = vs) # with by=
+```
+
+### Behaviour
+
+- The mean variable must be numeric; non-numeric produces an error.
+- N = count of non-missing values of the mean variable per category/cell.
+- Formatted via `.fmt_sum()` (same formatting as the summarize path).
+- Compatible with `sort=`, `missing=`, and all variable types (factor,
+  character, numeric, haven-labelled).
+- **One-way**: replaces Freq., Percent, Cum. columns with Mean and N columns.
+  Total row shows overall mean and overall N.
+- **Two-way**: replaces freq+pct cells with mean (top) and N (bottom).
+  `pct` and `freq` are silently ignored. Empty cells (N = 0): mean line
+  is blank, N shows `0`. Compatible with `by=`.
+
+### Print header
+
+Both modes print `"Mean of <mean_label or mean_name>"` above the table.
+
+### Totals — observation-weighted means
+
+All marginal/total means are computed directly from observation-level data,
+NOT as averages of cell/category means (which would be incorrect for
+unbalanced designs).
+
+### S3 object additions to `tula_tab` (one-way)
+
+Five new NULL-default fields:
+
+```r
+mean_vals   # numeric vector aligned to tab_df rows (or NULL)
+n_vals      # integer vector aligned to tab_df rows (or NULL)
+mean_name   # character: mean variable name (or NULL)
+mean_label  # character: haven variable label (or NULL)
+mean_grand  # list(mean = numeric, n = integer) for Total row (or NULL)
+```
+
+### Key helper: `.compute_oneway_means()`
+
+Located in `R/tab_helpers.R`. Takes the original vector, the mean vector,
+`tab_df`, and `var_type`. Uses `tapply()` to compute per-group means and
+non-missing Ns, then aligns results to `tab_df` rows by matching on
+`num_value` (numeric/haven) or trimmed `value` (factor/character).
+Missing rows handled separately via `is.na(vec)`.
+
+### Rendering: `.format_tab_mean_table()`
+
+Located in `R/tab_helpers.R`. Called from `.format_tab_table()` when
+`mean_mode` is detected (`!is.null(tab_obj$mean_vals)`). Renders two
+columns (Mean + N) instead of the usual Freq./Percent/Cum. columns.
+
+### S3 object additions to `tula_crosstab` (two-way)
+
+Ten new NULL-default fields (all NULL when mean mode is inactive):
+
+```r
+mean_mat            # numeric matrix [rows × cols] of cell means
+n_mat               # integer matrix [rows × cols] of cell Ns
+mean_name           # character: mean variable name
+mean_label          # character: haven variable label (or NULL)
+mean_row_marginals  # numeric vector: marginal mean per row level
+n_row_marginals     # integer vector: N per row level
+mean_col_marginals  # numeric vector: marginal mean per col level
+n_col_marginals     # integer vector: N per col level
+mean_grand          # numeric scalar: overall mean
+n_grand             # integer scalar: overall N
+```
+
+### Key helper: `.build_mean_crosstab()`
+
+Located in `R/crosstab_helpers.R`. Takes the same `y_keys` / `x_keys`
+factor key mapping returned by `.build_crosstab()` and computes cell means
+and Ns via `tapply()`. Also computes observation-weighted marginal means.
+Applies the same sort order as the count matrix when `sort = TRUE`.
+
+### Pipeline (two-way)
+
+```
+tulatab(y, x, data = df, mean = z)
+  ├─ resolve y, x, mean via NSE
+  ├─ guards: numeric check, length check
+  ├─ .build_crosstab(y_vec, x_vec, ...)
+  │    └─ returns ct_matrix + y_keys, x_keys, keep_mask, sort orders
+  ├─ .build_mean_crosstab(y_keys, x_keys, mean_vec[keep_mask], ...)
+  │    └─ returns mean_mat, n_mat, marginals
+  └─ new_tula_crosstab(..., mean_mat, n_mat, ...)
+       └─ print.tula_crosstab()
+            └─ .format_crosstab_table() detects mean_mode
+                 └─ .render_crosstab_panel() with mean-mode branches
+
+### Pipeline (one-way)
+
+tulatab(y, data = df, mean = z)
+  ├─ resolve y, mean via NSE
+  ├─ guards: numeric check, length check
+  ├─ .build_tab_df(vec, ...) → tab_df
+  ├─ .compute_oneway_means(vec, mean_vec, tab_df, var_type)
+  │    └─ returns mean_vals, n_vals, mean_total, n_total
+  └─ new_tula_tab(..., mean_vals, n_vals, mean_grand)
+       └─ print.tula_tab()
+            └─ .format_tab_table() detects mean_mode
+                 └─ .format_tab_mean_table() renders Mean + N columns
+```
+
+### `.build_crosstab()` return value expansion
+
+To support `mean=`, `.build_crosstab()` now returns additional fields
+alongside the count matrix:
+
+```r
+list(
+  ct_matrix      = ct,
+  row_levels     = rownames(ct),
+  col_levels     = colnames(ct),
+  y_keys         = y_keys,          # factor keys (after NA filtering)
+  x_keys         = x_keys,          # factor keys (after NA filtering)
+  keep_mask      = keep,            # logical mask applied to inputs
+  sort_row_order = sort_row_order,  # integer permutation or NULL
+  sort_col_order = sort_col_order   # integer permutation or NULL
+)
+```
+
+This allows `.build_mean_crosstab()` to use the same observation-to-cell
+mapping as the count matrix, without rebuilding the key mapping.
 
 ---
 

@@ -29,7 +29,7 @@
 
 #' @keywords internal
 #'
-#' Format the two-column header block (Stata-style).
+#' Format the two-column header block (Stata-inspired layout).
 #'
 #' Renders a left column (model fit stats) and a right column (sample stats)
 #' side by side, with exactly `total_width` characters per line.

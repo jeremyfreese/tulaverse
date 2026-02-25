@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
 # tulatab() internal helpers — tula tabulate path
 #
-# These functions build and format Stata-style frequency tables.
+# These functions build and format Stata-inspired frequency tables.
 # All are internal (no roxygen export).
 # ---------------------------------------------------------------------------
 
@@ -354,6 +354,82 @@
 }
 
 
+# Compute per-category means and Ns for one-way mean= mode.
+#
+# Returns a list with:
+#   mean_vals  - numeric vector aligned to tab_df rows
+#   n_vals     - integer vector aligned to tab_df rows
+#   mean_total - overall mean (scalar)
+#   n_total    - overall N (scalar)
+.compute_oneway_means <- function(vec, mean_vec, tab_df, var_type) {
+  n_rows    <- nrow(tab_df)
+  mean_vals <- rep(NA_real_, n_rows)
+  n_vals    <- rep(0L, n_rows)
+
+  # Compute per-group means via tapply, then align to tab_df rows.
+  # The alignment key depends on variable type.
+
+  # Handle non-missing observations
+  if (var_type == "haven_labelled") {
+    # Group by underlying numeric codes
+    raw_codes     <- as.numeric(unclass(vec))
+    non_na        <- !is.na(vec)  # haven NAs (regular + tagged) are NA
+    grp_means     <- tapply(mean_vec[non_na], raw_codes[non_na], mean, na.rm = TRUE)
+    grp_ns        <- tapply(!is.na(mean_vec[non_na]), raw_codes[non_na], sum)
+  } else if (var_type == "numeric") {
+    non_na    <- !is.na(vec)
+    grp_means <- tapply(mean_vec[non_na], vec[non_na], mean, na.rm = TRUE)
+    grp_ns    <- tapply(!is.na(mean_vec[non_na]), vec[non_na], sum)
+  } else {
+    # factor, ordered, character — tapply on the vector gives names = level names
+    non_na    <- !is.na(vec)
+    grp_means <- tapply(mean_vec[non_na], as.character(vec[non_na]), mean, na.rm = TRUE)
+    grp_ns    <- tapply(!is.na(mean_vec[non_na]), as.character(vec[non_na]), sum)
+  }
+
+  # Align tapply results to tab_df rows
+  for (i in seq_len(n_rows)) {
+    row <- tab_df[i, ]
+
+    if (row$is_missing) {
+      # Missing row: compute from observations where vec is NA
+      na_mask <- is.na(vec)
+      vals    <- mean_vec[na_mask]
+      n_vals[i]    <- sum(!is.na(vals))
+      mean_vals[i] <- if (n_vals[i] > 0L) mean(vals, na.rm = TRUE) else NA_real_
+    } else if (var_type %in% c("numeric", "haven_labelled") && !is.na(row$num_value)) {
+      key <- as.character(row$num_value)
+      if (key %in% names(grp_means)) {
+        mean_vals[i] <- grp_means[[key]]
+        n_vals[i]    <- as.integer(grp_ns[[key]])
+      }
+    } else {
+      # factor / ordered / character: match by trimmed display label
+      key <- trimws(row$value)
+      if (key %in% names(grp_means)) {
+        mean_vals[i] <- grp_means[[key]]
+        n_vals[i]    <- as.integer(grp_ns[[key]])
+      }
+    }
+  }
+
+  # Replace NaN with NA
+  mean_vals[is.nan(mean_vals)] <- NA_real_
+
+  # Overall
+  mean_total <- mean(mean_vec, na.rm = TRUE)
+  if (is.nan(mean_total)) mean_total <- NA_real_
+  n_total    <- sum(!is.na(mean_vec))
+
+  list(
+    mean_vals  = mean_vals,
+    n_vals     = n_vals,
+    mean_total = mean_total,
+    n_total    = as.integer(n_total)
+  )
+}
+
+
 # Format a frequency count with commas, right-aligned.
 .fmt_freq <- function(n, width = 10L) {
   if (is.na(n)) return(strrep(" ", width))
@@ -380,6 +456,10 @@
   tab_df   <- tab_obj$tab_df
   show_cum <- tab_obj$show_cum
   width    <- .resolve_width(tab_obj$width)
+
+  # --- Mean mode: completely different column layout -------------------------
+  mean_mode <- !is.null(tab_obj$mean_vals)
+  if (mean_mode) return(.format_tab_mean_table(tab_obj, tab_df, width))
 
   # Fixed column widths
   cw_freq <- 10L
@@ -431,13 +511,13 @@
   if (lbl_w < 5L) lbl_w <- 5L   # minimum label width
 
   # Separators: dashes with + at pipe position
-  sep_line <- paste0(char_rep("-", lbl_w + 1L), "+", char_rep("-", num_w))
+  sep_line <- paste0(char_rep(.BOX_H, lbl_w + 1L), .BOX_CROSS, char_rep(.BOX_H, num_w))
 
   # Column header line
   var_hdr <- .truncate_tab_label(var_display, lbl_w)
   if (show_cum) {
     hdr_line <- sprintf(
-      "%s |%s %s %s",
+      paste0("%s ", .BOX_V, "%s %s %s"),
       pad_left(var_hdr, lbl_w),
       pad_left("Freq.", cw_freq),
       pad_left("Percent", cw_pct),
@@ -445,7 +525,7 @@
     )
   } else {
     hdr_line <- sprintf(
-      "%s |%s %s",
+      paste0("%s ", .BOX_V, "%s %s"),
       pad_left(var_hdr, lbl_w),
       pad_left("Freq.", cw_freq),
       pad_left("Percent", cw_pct)
@@ -489,7 +569,7 @@
 
     if (show_cum) {
       line <- sprintf(
-        "%s |%s %s %s",
+        paste0("%s ", .BOX_V, "%s %s %s"),
         lbl_fmt,
         .fmt_freq(row$freq, cw_freq),
         .fmt_pct(row$percent, cw_pct),
@@ -497,7 +577,7 @@
       )
     } else {
       line <- sprintf(
-        "%s |%s %s",
+        paste0("%s ", .BOX_V, "%s %s"),
         lbl_fmt,
         .fmt_freq(row$freq, cw_freq),
         .fmt_pct(row$percent, cw_pct)
@@ -516,7 +596,7 @@
 
   if (show_cum) {
     total_line <- sprintf(
-      "%s |%s %s %s",
+      paste0("%s ", .BOX_V, "%s %s %s"),
       total_lbl,
       .fmt_freq(total_freq, cw_freq),
       .fmt_pct(100, cw_pct),
@@ -524,13 +604,158 @@
     )
   } else {
     total_line <- sprintf(
-      "%s |%s %s",
+      paste0("%s ", .BOX_V, "%s %s"),
       total_lbl,
       .fmt_freq(total_freq, cw_freq),
       .fmt_pct(100, cw_pct)
     )
   }
 
+  lines <- c(lines, total_line)
+
+  lines
+}
+
+
+# Format a one-way tab table in mean mode (Mean + N columns).
+#
+# Called from .format_tab_table() when mean_mode is detected.
+# Returns a character vector of output lines.
+.format_tab_mean_table <- function(tab_obj, tab_df, width) {
+  mean_vals  <- tab_obj$mean_vals
+  n_vals     <- tab_obj$n_vals
+  mean_grand <- tab_obj$mean_grand
+
+  # --- Format all mean values to determine column widths --------------------
+  # Use .fmt_sum() (scalar) for each value
+  all_mean_strings <- character(nrow(tab_df))
+  for (i in seq_len(nrow(tab_df))) {
+    if (is.na(mean_vals[i])) {
+      all_mean_strings[i] <- ""
+    } else {
+      all_mean_strings[i] <- trimws(.fmt_sum(mean_vals[i], digits = 7L, width = 1L))
+    }
+  }
+  # Total row mean
+  total_mean_str <- if (is.na(mean_grand$mean)) {
+    ""
+  } else {
+    trimws(.fmt_sum(mean_grand$mean, digits = 7L, width = 1L))
+  }
+
+  # Format all N values
+  all_n_strings <- character(nrow(tab_df))
+  for (i in seq_len(nrow(tab_df))) {
+    all_n_strings[i] <- formatC(as.integer(n_vals[i]), format = "d", big.mark = ",")
+  }
+  total_n_str <- formatC(as.integer(mean_grand$n), format = "d", big.mark = ",")
+
+  # --- Column widths -------------------------------------------------------
+  cw_mean <- max(
+    nchar(all_mean_strings),
+    nchar(total_mean_str),
+    nchar("Mean"),
+    6L,
+    na.rm = TRUE
+  ) + 2L   # 2 chars padding
+
+  cw_n <- max(
+    nchar(all_n_strings),
+    nchar(total_n_str),
+    nchar("N"),
+    4L,
+    na.rm = TRUE
+  ) + 2L   # 2 chars padding
+
+  # Numeric portion: " |" (pipe_w) + cw_mean + " " + cw_n
+  pipe_w      <- 2L
+  num_w       <- cw_mean + 1L + cw_n
+  total_num_w <- pipe_w + num_w
+
+  # --- Label column width ---------------------------------------------------
+  var_display <- if (!is.null(tab_obj$var_label) && nzchar(tab_obj$var_label)) {
+    tab_obj$var_label
+  } else {
+    tab_obj$var_name
+  }
+
+  all_display_vals <- tab_df$value
+  natural_lbl_w <- max(
+    nchar(all_display_vals),
+    nchar("Total"),
+    nchar(var_display),
+    1L,
+    na.rm = TRUE
+  )
+  if (tab_obj$var_type %in% c("factor", "ordered", "character")) {
+    natural_lbl_w <- max(natural_lbl_w + 2L, nchar(var_display), nchar("Total"))
+  } else if (tab_obj$var_type == "haven_labelled") {
+    natural_lbl_w <- max(natural_lbl_w + 1L, nchar(var_display), nchar("Total"))
+  }
+
+  natural_total_w <- natural_lbl_w + total_num_w
+  total_width     <- min(natural_total_w, width)
+  lbl_w           <- total_width - total_num_w
+  if (lbl_w < 5L) lbl_w <- 5L
+
+  # --- "Mean of ..." header line -------------------------------------------
+  mean_display <- if (!is.null(tab_obj$mean_label) && nzchar(tab_obj$mean_label)) {
+    tab_obj$mean_label
+  } else {
+    tab_obj$mean_name
+  }
+  mean_hdr_line <- paste0("Mean of ", mean_display)
+
+  # --- Separator and column header ------------------------------------------
+  sep_line <- paste0(char_rep(.BOX_H, lbl_w + 1L), .BOX_CROSS,
+                     char_rep(.BOX_H, num_w))
+
+  var_hdr <- .truncate_tab_label(var_display, lbl_w)
+  hdr_line <- sprintf(
+    paste0("%s ", .BOX_V, "%s %s"),
+    pad_left(var_hdr, lbl_w),
+    pad_left("Mean", cw_mean),
+    pad_left("N", cw_n)
+  )
+
+  lines <- c(mean_hdr_line, sep_line, hdr_line, sep_line)
+
+  # --- Data rows ------------------------------------------------------------
+  for (i in seq_len(nrow(tab_df))) {
+    row <- tab_df[i, ]
+
+    # Build display label (same logic as normal mode)
+    display_lbl <- row$value
+    if (tab_obj$var_type %in% c("factor", "ordered", "character")) {
+      display_lbl <- paste0("  ", display_lbl)
+    } else if (tab_obj$var_type == "haven_labelled") {
+      display_lbl <- paste0(" ", display_lbl)
+    }
+    display_lbl <- .truncate_tab_label(display_lbl, lbl_w)
+
+    if (tab_obj$var_type %in% c("numeric")) {
+      lbl_fmt <- pad_left(display_lbl, lbl_w)
+    } else {
+      lbl_fmt <- pad_right(display_lbl, lbl_w)
+    }
+
+    mean_fmt <- pad_left(all_mean_strings[i], cw_mean)
+    n_fmt    <- pad_left(all_n_strings[i], cw_n)
+
+    line <- sprintf(paste0("%s ", .BOX_V, "%s %s"), lbl_fmt, mean_fmt, n_fmt)
+    lines <- c(lines, line)
+  }
+
+  # --- Separator before total -----------------------------------------------
+  lines <- c(lines, sep_line)
+
+  # --- Total row ------------------------------------------------------------
+  total_lbl <- pad_left("Total", lbl_w)
+  total_mean_fmt <- pad_left(total_mean_str, cw_mean)
+  total_n_fmt    <- pad_left(total_n_str, cw_n)
+
+  total_line <- sprintf(paste0("%s ", .BOX_V, "%s %s"),
+                        total_lbl, total_mean_fmt, total_n_fmt)
   lines <- c(lines, total_line)
 
   lines

@@ -3,7 +3,7 @@
 #' Build the canonical coefficient data frame from a model.
 #'
 #' Extracts the coefficient matrix and confidence intervals, then groups
-#' factor variable dummy rows under a shared header row (Stata-style).
+#' factor variable dummy rows under a shared header row (Stata-inspired layout).
 #' The intercept is always placed last.
 #'
 #' Factor grouping uses the `assign` attribute of `model.matrix()` to map
@@ -564,7 +564,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   # Label column width derived from total_width
   lbl_w <- total_width - num_cols_w
 
-  sep <- char_rep("-", total_width)
+  sep <- char_rep(.BOX_H, total_width)
 
   # P-value column header label
   pval_hdr <- if (stat_label == "z") "P>|z|" else "P>|t|"
@@ -584,7 +584,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   # Build column header line
   if (wide) {
     hdr <- sprintf(
-      "%s |%s %s %s %s %s %s",
+      paste0("%s ", .BOX_V, "%s %s %s %s %s %s"),
       pad_right("", lbl_w),
       pad_left(coef_hdr,   cw_coef),
       pad_left(se_hdr,     cw_se),
@@ -595,7 +595,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
     )
   } else {
     hdr <- sprintf(
-      "%s |%s %s %s %s",
+      paste0("%s ", .BOX_V, "%s %s %s %s"),
       pad_right("", lbl_w),
       pad_left(coef_hdr,    cw_coef),
       pad_left(se_hdr,      cw_se),
@@ -627,7 +627,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
     if (isTRUE(row$is_factor_header)) {
       # Factor group header row: label + pipe + trailing spaces to fill total_width
       trailing <- strrep(" ", total_width - lbl_w - 2L)
-      lines <- c(lines, paste0(lbl_fmt, " |", trailing))
+      lines <- c(lines, paste0(lbl_fmt, " ", .BOX_V, trailing))
 
     } else if (isTRUE(row$is_ref)) {
       # Reference-level row: show 0 (or 1 when exp) for Coef, blanks for rest
@@ -638,7 +638,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
       if (wide) {
         blank_ci <- strrep(" ", cw_ci)
         line <- sprintf(
-          "%s |%s %s %s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s %s %s"),
           lbl_fmt,
           pad_left(ref_val, cw_coef),
           blank_se,
@@ -649,7 +649,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
         )
       } else {
         line <- sprintf(
-          "%s |%s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s"),
           lbl_fmt,
           pad_left(ref_val, cw_coef),
           blank_se,
@@ -677,7 +677,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 
       if (wide) {
         line <- sprintf(
-          "%s |%s %s %s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s %s %s"),
           lbl_fmt,
           fmt_num(est_display,   width = cw_coef),
           fmt_num(se_display,    width = cw_se),
@@ -688,7 +688,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
         )
       } else {
         line <- sprintf(
-          "%s |%s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s"),
           lbl_fmt,
           fmt_num(est_display,   width = cw_coef),
           fmt_num(se_display,    width = cw_se),
@@ -734,7 +734,7 @@ format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
   if (wide) num_cols_w <- num_cols_w + 1L + cw_ci + 1L + cw_ci
 
   lbl_w <- total_width - num_cols_w
-  sep   <- char_rep("-", total_width)
+  sep   <- char_rep(.BOX_H, total_width)
 
   blank_stat <- strrep(" ", cw_stat)
   blank_pval <- strrep(" ", cw_pval)
@@ -748,7 +748,7 @@ format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
 
     if (wide) {
       line <- sprintf(
-        "%s |%s %s %s %s %s %s",
+        paste0("%s ", .BOX_V, "%s %s %s %s %s %s"),
         lbl_fmt,
         fmt_num(row$estimate, width = cw_coef),
         fmt_num(row$std_err,  width = cw_se),
@@ -759,7 +759,7 @@ format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
       )
     } else {
       line <- sprintf(
-        "%s |%s %s %s %s",
+        paste0("%s ", .BOX_V, "%s %s %s %s"),
         lbl_fmt,
         fmt_num(row$estimate, width = cw_coef),
         fmt_num(row$std_err,  width = cw_se),

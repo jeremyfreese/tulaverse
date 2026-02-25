@@ -266,7 +266,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   natural_lbl_w   <- max(nchar(all_labels), dep_lbl_len, 1L, na.rm = TRUE)
   lbl_w           <- min(natural_lbl_w, available_lbl_w)
 
-  sep <- char_rep("-", total_width)
+  sep <- char_rep(.BOX_H, total_width)
 
   # --- helpers ---------------------------------------------------------------
 
@@ -311,7 +311,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                      function(o) paste0(pad_left(.truncate_label(o, nz_w), nz_w),
                                         strrep(" ", star_w)),
                      character(1L))
-  hdr_line <- paste0(pad_right(dep_lbl, lbl_w), " |",
+  hdr_line <- paste0(pad_right(dep_lbl, lbl_w), " ", .BOX_V,
                      paste(col_hdrs, collapse = strrep(" ", col_gap)))
 
   lines <- c(sep, hdr_line, sep)
@@ -326,7 +326,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
     if (isTRUE(base_row$is_factor_header)) {
       # One line only: label + pipe + blanks across all outcome columns
-      lines <- c(lines, paste0(lbl_fmt, " |", strrep(" ", num_w - pipe_w)))
+      lines <- c(lines, paste0(lbl_fmt, " ", .BOX_V, strrep(" ", num_w - pipe_w)))
       next
     }
 
@@ -335,7 +335,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                          function(b) fmt_coef_cell(b$coef_df[i, ]),
                          character(1L))
     lines <- c(lines,
-               paste0(lbl_fmt, " |",
+               paste0(lbl_fmt, " ", .BOX_V,
                       paste(coef_cells, collapse = strrep(" ", col_gap))))
 
     # SE line (blank label area)
@@ -343,7 +343,7 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                        function(b) fmt_se_cell(b$coef_df[i, ]),
                        character(1L))
     lines <- c(lines,
-               paste0(pad_right("", lbl_w), " |",
+               paste0(pad_right("", lbl_w), " ", .BOX_V,
                       paste(se_cells, collapse = strrep(" ", col_gap))))
   }
 

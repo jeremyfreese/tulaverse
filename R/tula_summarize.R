@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# tula() summarize path — Stata-style -summarize- output for data frames,
+# tula() summarize path — Stata-inspired -summarize- output for data frames,
 # tibbles, and atomic vectors.
 #
 # Entry point: .tula_summarize(df, width, sep, mad, median, digits)
@@ -183,14 +183,14 @@ format_summary_table <- function(rows, opts, total_width) {
 
   lbl_w <- max(total_width - num_cols_w, 1L)
 
-  sep_line <- char_rep("-", total_width)
+  sep_line <- char_rep(.BOX_H, total_width)
 
   # Column headers vary by options
   mean_hdr <- if (opts$median) "Median" else "Mean"
   sd_hdr   <- if (opts$median) "IQR" else if (opts$mad) "MAD" else "Std. dev."
 
   hdr_line <- sprintf(
-    "%s |%s %s %s %s %s",
+    paste0("%s ", .BOX_V, "%s %s %s %s %s"),
     pad_right("Variable", lbl_w),
     pad_left("Obs",      cw_obs),
     pad_left(mean_hdr,   cw_mean),
@@ -243,7 +243,7 @@ format_summary_table <- function(rows, opts, total_width) {
       row$row_type,
 
       "numeric" = sprintf(
-        "%s |%s %s %s %s %s",
+        paste0("%s ", .BOX_V, "%s %s %s %s %s"),
         lbl_fmt,
         .fmt_obs(row$n_obs,    cw_obs),
         .fmt_sum(row$mean_val, digits = opts$digits, width = cw_mean),
@@ -259,7 +259,7 @@ format_summary_table <- function(rows, opts, total_width) {
         blank_mn <- strrep(" ", cw_min)
         blank_mx <- strrep(" ", cw_max)
         sprintf(
-          "%s |%s %s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s %s"),
           lbl_fmt,
           .fmt_obs(row$n_obs, cw_obs),
           str_tag,
@@ -272,7 +272,7 @@ format_summary_table <- function(rows, opts, total_width) {
       "factor_header" = {
         # Variable name row: Obs = total non-missing N; all other columns blank
         sprintf(
-          "%s |%s %s %s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s %s %s"),
           lbl_fmt,
           .fmt_obs(row$n_obs, cw_obs),    # total non-missing N
           strrep(" ", cw_mean),
@@ -291,7 +291,7 @@ format_summary_table <- function(rows, opts, total_width) {
         right_w <- cw_sd + 1L + cw_min + 1L + cw_max   # = 34
         right_field <- pad_left(lv_count_str, right_w)
         sprintf(
-          "%s |%s %s %s",
+          paste0("%s ", .BOX_V, "%s %s %s"),
           lbl_fmt,
           strrep(" ", cw_obs),                                    # Obs blank
           .fmt_sum(row$mean_val, digits = opts$digits, width = cw_mean), # proportion
@@ -300,7 +300,7 @@ format_summary_table <- function(rows, opts, total_width) {
       },
 
       # Fallback (should not occur)
-      sprintf("%s |", lbl_fmt)
+      sprintf(paste0("%s ", .BOX_V), lbl_fmt)
     )
 
     lines <- c(lines, line)

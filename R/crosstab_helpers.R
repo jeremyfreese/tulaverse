@@ -328,6 +328,8 @@
   ct <- as.matrix(table(y_fac, x_fac))
 
   # Sort by descending marginals if requested
+  sort_row_order <- NULL
+  sort_col_order <- NULL
   if (sort) {
     row_sums <- rowSums(ct)
     col_sums <- colSums(ct)
@@ -338,19 +340,24 @@
     # Non-missing rows sorted by descending total; missing rows at end
     nm_idx <- which(!y_miss)
     m_idx  <- which(y_miss)
-    row_order <- c(nm_idx[order(-row_sums[nm_idx])], m_idx)
+    sort_row_order <- c(nm_idx[order(-row_sums[nm_idx])], m_idx)
 
     nm_idx <- which(!x_miss)
     m_idx  <- which(x_miss)
-    col_order <- c(nm_idx[order(-col_sums[nm_idx])], m_idx)
+    sort_col_order <- c(nm_idx[order(-col_sums[nm_idx])], m_idx)
 
-    ct <- ct[row_order, col_order, drop = FALSE]
+    ct <- ct[sort_row_order, sort_col_order, drop = FALSE]
   }
 
   list(
-    ct_matrix  = ct,
-    row_levels = rownames(ct),
-    col_levels = colnames(ct)
+    ct_matrix      = ct,
+    row_levels     = rownames(ct),
+    col_levels     = colnames(ct),
+    y_keys         = y_keys,
+    x_keys         = x_keys,
+    keep_mask      = if (!missing) keep else rep(TRUE, length(y_keys)),
+    sort_row_order = sort_row_order,
+    sort_col_order = sort_col_order
   )
 }
 
@@ -385,6 +392,90 @@
 
 
 # -----------------------------------------------------------------------
+# Build mean and N matrices for mean= mode
+#
+# y_keys, x_keys: character vectors (already filtered for missing if needed)
+# mean_vec:       numeric vector (same length as y_keys / x_keys)
+# row_levels, col_levels: display-order level strings (from ct_matrix)
+# sort_row_order, sort_col_order: integer reordering vectors or NULL
+#
+# Returns list(mean_mat, n_mat, mean_row_marginals, n_row_marginals,
+#              mean_col_marginals, n_col_marginals, mean_grand, n_grand)
+# -----------------------------------------------------------------------
+.build_mean_crosstab <- function(y_keys, x_keys, mean_vec,
+                                  row_levels, col_levels,
+                                  sort_row_order = NULL,
+                                  sort_col_order = NULL) {
+
+  y_fac <- factor(y_keys, levels = row_levels)
+  x_fac <- factor(x_keys, levels = col_levels)
+
+  # Cell means and Ns
+  mean_mat <- tapply(mean_vec, list(y_fac, x_fac), mean, na.rm = TRUE)
+  n_mat    <- tapply(!is.na(mean_vec), list(y_fac, x_fac), sum)
+
+  # tapply returns NaN for cells with 0 non-missing obs; replace with NA
+  mean_mat[is.nan(mean_mat)] <- NA_real_
+  # tapply returns NULL/NA for empty factor-level combinations; coerce to matrix
+  mean_mat <- as.matrix(mean_mat)
+  n_mat    <- as.matrix(n_mat)
+  # Empty cells should show N=0, not NA
+  n_mat[is.na(n_mat)] <- 0L
+
+  # Apply sort order if requested (must match ct_matrix sort)
+  if (!is.null(sort_row_order)) {
+    mean_mat <- mean_mat[sort_row_order, , drop = FALSE]
+    n_mat    <- n_mat[sort_row_order, , drop = FALSE]
+  }
+  if (!is.null(sort_col_order)) {
+    mean_mat <- mean_mat[, sort_col_order, drop = FALSE]
+    n_mat    <- n_mat[, sort_col_order, drop = FALSE]
+  }
+
+  # Marginal means (observation-weighted, NOT averages of cell means)
+  # After sort, row/col levels of mean_mat match the sorted ct_matrix
+  sorted_row_levels <- rownames(mean_mat)
+  sorted_col_levels <- colnames(mean_mat)
+
+  mean_row_marginals <- vapply(sorted_row_levels, function(lv) {
+    mask <- y_keys == lv & !is.na(y_keys)
+    vals <- mean_vec[mask]
+    if (all(is.na(vals))) NA_real_ else mean(vals, na.rm = TRUE)
+  }, numeric(1L))
+
+  n_row_marginals <- vapply(sorted_row_levels, function(lv) {
+    mask <- y_keys == lv & !is.na(y_keys)
+    sum(!is.na(mean_vec[mask]))
+  }, integer(1L))
+
+  mean_col_marginals <- vapply(sorted_col_levels, function(lv) {
+    mask <- x_keys == lv & !is.na(x_keys)
+    vals <- mean_vec[mask]
+    if (all(is.na(vals))) NA_real_ else mean(vals, na.rm = TRUE)
+  }, numeric(1L))
+
+  n_col_marginals <- vapply(sorted_col_levels, function(lv) {
+    mask <- x_keys == lv & !is.na(x_keys)
+    sum(!is.na(mean_vec[mask]))
+  }, integer(1L))
+
+  mean_grand <- if (all(is.na(mean_vec))) NA_real_ else mean(mean_vec, na.rm = TRUE)
+  n_grand    <- sum(!is.na(mean_vec))
+
+  list(
+    mean_mat           = mean_mat,
+    n_mat              = n_mat,
+    mean_row_marginals = mean_row_marginals,
+    n_row_marginals    = n_row_marginals,
+    mean_col_marginals = mean_col_marginals,
+    n_col_marginals    = n_col_marginals,
+    mean_grand         = mean_grand,
+    n_grand            = n_grand
+  )
+}
+
+
+# -----------------------------------------------------------------------
 # Master crosstab renderer — returns character vector of output lines
 # -----------------------------------------------------------------------
 .format_crosstab_table <- function(ct_obj) {
@@ -393,8 +484,17 @@
   ct_mat     <- ct_obj$ct_matrix
   row_levels <- ct_obj$row_levels
   col_levels <- ct_obj$col_levels
-  pct_mode   <- ct_obj$pct
-  show_freq  <- ct_obj$freq
+
+  # Mean mode: when mean_mat is non-NULL, display means + Ns instead of freq + pct
+  mean_mode  <- !is.null(ct_obj$mean_mat)
+
+  if (mean_mode) {
+    pct_mode  <- NULL
+    show_freq <- FALSE
+  } else {
+    pct_mode  <- ct_obj$pct
+    show_freq <- ct_obj$freq
+  }
 
   n_rows <- nrow(ct_mat)
   n_cols <- ncol(ct_mat)
@@ -404,7 +504,7 @@
   col_totals  <- colSums(ct_mat)
   grand_total <- sum(ct_mat)
 
-  # Percentage matrix (NULL if pct_mode is NULL)
+  # Percentage matrix (NULL if pct_mode is NULL or mean mode)
   pct_mat <- .compute_crosstab_pct(ct_mat, pct_mode, row_totals, col_totals,
                                    grand_total)
 
@@ -431,15 +531,37 @@
 
   # --- Column width calculations -----------------------------------------
 
-  # Uniform data column width: must fit the widest frequency AND percentages
-  all_counts <- c(as.integer(ct_mat), as.integer(row_totals),
-                  as.integer(col_totals), as.integer(grand_total))
-  max_count <- max(abs(all_counts), 1L)
-  freq_w <- nchar(formatC(max_count, format = "d", big.mark = ","))
-  pct_w  <- 6L   # "100.00"
+  if (mean_mode) {
+    # Width driven by formatted mean values and Ns
+    all_means <- c(as.numeric(ct_obj$mean_mat),
+                   ct_obj$mean_row_marginals,
+                   ct_obj$mean_col_marginals,
+                   ct_obj$mean_grand)
+    all_means <- all_means[!is.na(all_means)]
+    mean_w <- if (length(all_means) > 0L) {
+      max(vapply(all_means, function(v) nchar(trimws(.fmt_sum(v, digits = 7L, width = 1L))), integer(1L)))
+    } else {
+      1L
+    }
 
-  # Cell content width (widest number we need to display)
-  cell_w <- max(freq_w, pct_w)
+    all_ns <- c(as.integer(ct_obj$n_mat),
+                ct_obj$n_row_marginals,
+                ct_obj$n_col_marginals,
+                ct_obj$n_grand)
+    max_n <- max(abs(all_ns), 1L)
+    n_w <- nchar(formatC(max_n, format = "d", big.mark = ","))
+
+    cell_w <- max(mean_w, n_w)
+  } else {
+    # Width driven by frequencies and percentages
+    all_counts <- c(as.integer(ct_mat), as.integer(row_totals),
+                    as.integer(col_totals), as.integer(grand_total))
+    max_count <- max(abs(all_counts), 1L)
+    freq_w <- nchar(formatC(max_count, format = "d", big.mark = ","))
+    pct_w  <- 6L   # "100.00"
+
+    cell_w <- max(freq_w, pct_w)
+  }
 
   # Minimum column width: content + 3 chars padding, at least 10
   cw_data <- max(cell_w + 3L, 10L)
@@ -503,7 +625,16 @@
       row_hdr_lines = row_hdr_lines,
       col_display  = col_display,
       pct_mode     = pct_mode,
-      show_freq    = show_freq
+      show_freq    = show_freq,
+      mean_mode    = mean_mode,
+      mean_mat     = ct_obj$mean_mat,
+      n_mat        = ct_obj$n_mat,
+      mean_row_marginals = ct_obj$mean_row_marginals,
+      n_row_marginals    = ct_obj$n_row_marginals,
+      mean_col_marginals = ct_obj$mean_col_marginals,
+      n_col_marginals    = ct_obj$n_col_marginals,
+      mean_grand         = ct_obj$mean_grand,
+      n_grand            = ct_obj$n_grand
     )
 
     if (p > 1L) lines <- c(lines, "")
@@ -522,7 +653,15 @@
                                    grand_total, total_col_pct, total_row_pct,
                                    total_row_total_pct,
                                    row_lbl_w, cw_data, row_hdr_lines,
-                                   col_display, pct_mode, show_freq) {
+                                   col_display, pct_mode, show_freq,
+                                   mean_mode = FALSE,
+                                   mean_mat = NULL, n_mat = NULL,
+                                   mean_row_marginals = NULL,
+                                   n_row_marginals = NULL,
+                                   mean_col_marginals = NULL,
+                                   n_col_marginals = NULL,
+                                   mean_grand = NULL,
+                                   n_grand = NULL) {
 
   n_panel <- length(panel_cols)
   n_rows  <- nrow(ct_mat)
@@ -538,8 +677,8 @@
   col_name_padded <- pad_right(col_name_centered, data_zone_w)
 
   col_name_line <- paste0(
-    strrep(" ", row_lbl_w), " |",
-    col_name_padded, " |"
+    strrep(" ", row_lbl_w), " ", .BOX_V,
+    col_name_padded, " ", .BOX_V
   )
 
   # --- Column labels (up to 2 lines each) ---
@@ -578,14 +717,14 @@
     # Row header
     rh <- pad_left(row_hdr_lines[ln], row_lbl_w)
 
-    col_label_lines[ln] <- paste0(rh, " |", data_str, " |", total_hdr)
+    col_label_lines[ln] <- paste0(rh, " ", .BOX_V, data_str, " ", .BOX_V, total_hdr)
   }
 
   # --- Separator line ---
   sep_line <- paste0(
-    char_rep("-", row_lbl_w), "-+",
-    char_rep("-", data_zone_w), "-+",
-    char_rep("-", total_zone_w)
+    char_rep(.BOX_H, row_lbl_w), .BOX_H, .BOX_CROSS,
+    char_rep(.BOX_H, data_zone_w), .BOX_H, .BOX_CROSS,
+    char_rep(.BOX_H, total_zone_w)
   )
 
   # --- Data rows ---
@@ -594,41 +733,65 @@
     row_lbl <- pad_left(row_levels[i], row_lbl_w)
     blank_lbl <- strrep(" ", row_lbl_w)
 
-    # Frequencies line
-    if (show_freq) {
-      freq_parts <- vapply(panel_cols, function(j) {
-        pad_left(formatC(ct_mat[i, j], format = "d", big.mark = ","), cw_data)
+    if (mean_mode) {
+      # --- Mean mode: mean line + N line ---
+      mean_parts <- vapply(panel_cols, function(j) {
+        val <- mean_mat[i, j]
+        if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data)
       }, character(1))
-      freq_data <- paste(freq_parts, collapse = "  ")
-      freq_total <- pad_left(formatC(row_totals[i], format = "d", big.mark = ","), cw_data)
-      data_lines <- c(data_lines, paste0(row_lbl, " |", freq_data, " |", freq_total))
-    }
+      mean_data <- paste(mean_parts, collapse = "  ")
+      # Row marginal mean in total column
+      row_m <- mean_row_marginals[i]
+      mean_total <- if (is.na(row_m)) pad_left("", cw_data) else .fmt_sum(row_m, digits = 7L, width = cw_data)
+      data_lines <- c(data_lines, paste0(row_lbl, " ", .BOX_V, mean_data, " ", .BOX_V, mean_total))
 
-    # Percentage line
-    if (!is.null(pct_mode)) {
-      pct_parts <- vapply(panel_cols, function(j) {
-        pad_left(sprintf("%.2f", pct_mat[i, j]), cw_data)
+      # N line
+      n_parts <- vapply(panel_cols, function(j) {
+        pad_left(formatC(n_mat[i, j], format = "d", big.mark = ","), cw_data)
       }, character(1))
-      pct_data <- paste(pct_parts, collapse = "  ")
-      pct_total_val <- if (!is.null(total_col_pct)) sprintf("%.2f", total_col_pct[i]) else ""
-      pct_total <- pad_left(pct_total_val, cw_data)
+      n_data <- paste(n_parts, collapse = "  ")
+      n_total <- pad_left(formatC(n_row_marginals[i], format = "d", big.mark = ","), cw_data)
+      data_lines <- c(data_lines, paste0(blank_lbl, " ", .BOX_V, n_data, " ", .BOX_V, n_total))
 
-      lbl <- if (show_freq) blank_lbl else row_lbl
-      data_lines <- c(data_lines, paste0(lbl, " |", pct_data, " |", pct_total))
-    }
+    } else {
+      # --- Freq/pct mode (existing logic) ---
 
-    # When neither freq nor pct: one blank line with label
-    if (!show_freq && is.null(pct_mode)) {
-      blank_data <- strrep(" ", data_zone_w)
-      blank_total <- strrep(" ", cw_data)
-      data_lines <- c(data_lines, paste0(row_lbl, " |", blank_data, " |", blank_total))
+      # Frequencies line
+      if (show_freq) {
+        freq_parts <- vapply(panel_cols, function(j) {
+          pad_left(formatC(ct_mat[i, j], format = "d", big.mark = ","), cw_data)
+        }, character(1))
+        freq_data <- paste(freq_parts, collapse = "  ")
+        freq_total <- pad_left(formatC(row_totals[i], format = "d", big.mark = ","), cw_data)
+        data_lines <- c(data_lines, paste0(row_lbl, " ", .BOX_V, freq_data, " ", .BOX_V, freq_total))
+      }
+
+      # Percentage line
+      if (!is.null(pct_mode)) {
+        pct_parts <- vapply(panel_cols, function(j) {
+          pad_left(sprintf("%.2f", pct_mat[i, j]), cw_data)
+        }, character(1))
+        pct_data <- paste(pct_parts, collapse = "  ")
+        pct_total_val <- if (!is.null(total_col_pct)) sprintf("%.2f", total_col_pct[i]) else ""
+        pct_total <- pad_left(pct_total_val, cw_data)
+
+        lbl <- if (show_freq) blank_lbl else row_lbl
+        data_lines <- c(data_lines, paste0(lbl, " ", .BOX_V, pct_data, " ", .BOX_V, pct_total))
+      }
+
+      # When neither freq nor pct: one blank line with label
+      if (!show_freq && is.null(pct_mode)) {
+        blank_data <- strrep(" ", data_zone_w)
+        blank_total <- strrep(" ", cw_data)
+        data_lines <- c(data_lines, paste0(row_lbl, " ", .BOX_V, blank_data, " ", .BOX_V, blank_total))
+      }
     }
 
     # Blank separator line between categories (not after last row)
     if (i < n_rows) {
       blank_data <- strrep(" ", data_zone_w)
       blank_total <- strrep(" ", cw_data)
-      data_lines <- c(data_lines, paste0(blank_lbl, " |", blank_data, " |", blank_total))
+      data_lines <- c(data_lines, paste0(blank_lbl, " ", .BOX_V, blank_data, " ", .BOX_V, blank_total))
     }
   }
 
@@ -638,33 +801,57 @@
 
   total_data_lines <- character(0)
 
-  if (show_freq) {
-    freq_parts <- vapply(panel_cols, function(j) {
-      pad_left(formatC(col_totals[j], format = "d", big.mark = ","), cw_data)
+  if (mean_mode) {
+    # Mean total row: column marginal means + grand mean
+    mean_parts <- vapply(panel_cols, function(j) {
+      val <- mean_col_marginals[j]
+      if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data)
     }, character(1))
-    freq_data <- paste(freq_parts, collapse = "  ")
-    freq_total <- pad_left(formatC(grand_total, format = "d", big.mark = ","), cw_data)
+    mean_data <- paste(mean_parts, collapse = "  ")
+    grand_m <- if (is.na(mean_grand)) pad_left("", cw_data) else .fmt_sum(mean_grand, digits = 7L, width = cw_data)
     total_data_lines <- c(total_data_lines,
-                          paste0(total_lbl, " |", freq_data, " |", freq_total))
-  }
+                          paste0(total_lbl, " ", .BOX_V, mean_data, " ", .BOX_V, grand_m))
 
-  if (!is.null(pct_mode)) {
-    pct_parts <- vapply(panel_cols, function(j) {
-      pad_left(sprintf("%.2f", total_row_pct[j]), cw_data)
+    # N total row: column marginal Ns + grand N
+    n_parts <- vapply(panel_cols, function(j) {
+      pad_left(formatC(n_col_marginals[j], format = "d", big.mark = ","), cw_data)
     }, character(1))
-    pct_data <- paste(pct_parts, collapse = "  ")
-    pct_total <- pad_left(sprintf("%.2f", total_row_total_pct), cw_data)
-
-    lbl <- if (show_freq) blank_lbl else total_lbl
+    n_data <- paste(n_parts, collapse = "  ")
+    n_total <- pad_left(formatC(n_grand, format = "d", big.mark = ","), cw_data)
     total_data_lines <- c(total_data_lines,
-                          paste0(lbl, " |", pct_data, " |", pct_total))
-  }
+                          paste0(blank_lbl, " ", .BOX_V, n_data, " ", .BOX_V, n_total))
 
-  if (!show_freq && is.null(pct_mode)) {
-    blank_data <- strrep(" ", data_zone_w)
-    blank_total <- strrep(" ", cw_data)
-    total_data_lines <- c(total_data_lines,
-                          paste0(total_lbl, " |", blank_data, " |", blank_total))
+  } else {
+    # --- Freq/pct total row (existing logic) ---
+
+    if (show_freq) {
+      freq_parts <- vapply(panel_cols, function(j) {
+        pad_left(formatC(col_totals[j], format = "d", big.mark = ","), cw_data)
+      }, character(1))
+      freq_data <- paste(freq_parts, collapse = "  ")
+      freq_total <- pad_left(formatC(grand_total, format = "d", big.mark = ","), cw_data)
+      total_data_lines <- c(total_data_lines,
+                            paste0(total_lbl, " ", .BOX_V, freq_data, " ", .BOX_V, freq_total))
+    }
+
+    if (!is.null(pct_mode)) {
+      pct_parts <- vapply(panel_cols, function(j) {
+        pad_left(sprintf("%.2f", total_row_pct[j]), cw_data)
+      }, character(1))
+      pct_data <- paste(pct_parts, collapse = "  ")
+      pct_total <- pad_left(sprintf("%.2f", total_row_total_pct), cw_data)
+
+      lbl <- if (show_freq) blank_lbl else total_lbl
+      total_data_lines <- c(total_data_lines,
+                            paste0(lbl, " ", .BOX_V, pct_data, " ", .BOX_V, pct_total))
+    }
+
+    if (!show_freq && is.null(pct_mode)) {
+      blank_data <- strrep(" ", data_zone_w)
+      blank_total <- strrep(" ", cw_data)
+      total_data_lines <- c(total_data_lines,
+                            paste0(total_lbl, " ", .BOX_V, blank_data, " ", .BOX_V, blank_total))
+    }
   }
 
   # --- Assemble all lines ---
@@ -674,4 +861,199 @@
     data_lines,
     sep_line,   # separator before total
     total_data_lines)
+}
+
+
+# -----------------------------------------------------------------------
+# by= level extraction for grouped crosstabs
+#
+# Returns a list:
+#   level_keys    chr vector — internal key per by-level
+#   level_headers chr vector — display header per by-level
+#                              (e.g. "sex = 2 [female]")
+#   key_vec       chr vector — same length as by_vec, mapping each obs
+#                              to its level key; NA when excluded
+# -----------------------------------------------------------------------
+.crosstab_by_levels <- function(by_vec, by_type, by_name, by_var_label,
+                                missing) {
+  hdr_name <- if (!is.null(by_var_label) && nzchar(by_var_label)) {
+    by_var_label
+  } else {
+    by_name
+  }
+
+  has_haven <- requireNamespace("haven", quietly = TRUE)
+
+  if (by_type == "haven_labelled") {
+    .ct_by_haven(by_vec, hdr_name, missing, has_haven)
+  } else if (by_type %in% c("factor", "ordered")) {
+    .ct_by_factor(by_vec, hdr_name, missing)
+  } else if (by_type == "character") {
+    .ct_by_character(by_vec, hdr_name, missing)
+  } else {
+    # numeric
+    .ct_by_numeric(by_vec, hdr_name, missing)
+  }
+}
+
+
+# --- Factor / ordered by-variable ----------------------------------------
+.ct_by_factor <- function(by_vec, hdr_name, missing) {
+  lvls    <- levels(by_vec)
+  key_vec <- as.character(by_vec)
+
+  level_keys    <- lvls
+  level_headers <- paste0(hdr_name, " = ", lvls)
+
+  if (missing && any(is.na(key_vec))) {
+    level_keys    <- c(level_keys, ".")
+    level_headers <- c(level_headers, paste0(hdr_name, " = ."))
+    key_vec[is.na(key_vec)] <- "."
+  }
+
+  list(level_keys = level_keys, level_headers = level_headers,
+       key_vec = key_vec)
+}
+
+
+# --- Character by-variable -----------------------------------------------
+.ct_by_character <- function(by_vec, hdr_name, missing) {
+  is_na  <- is.na(by_vec)
+  uvals  <- sort(unique(by_vec[!is_na]))
+
+  key_vec       <- by_vec
+  level_keys    <- uvals
+  level_headers <- paste0(hdr_name, " = ", uvals)
+
+  if (missing && any(is_na)) {
+    level_keys    <- c(level_keys, ".")
+    level_headers <- c(level_headers, paste0(hdr_name, " = ."))
+    key_vec[is_na] <- "."
+  }
+
+  list(level_keys = level_keys, level_headers = level_headers,
+       key_vec = key_vec)
+}
+
+
+# --- Numeric by-variable -------------------------------------------------
+.ct_by_numeric <- function(by_vec, hdr_name, missing) {
+  is_na <- is.na(by_vec)
+  uvals <- sort(unique(by_vec[!is_na]))
+
+  code_strs <- vapply(uvals, function(v) {
+    if (v == as.integer(v)) as.character(as.integer(v)) else as.character(v)
+  }, character(1))
+
+  key_vec <- rep(NA_character_, length(by_vec))
+  for (i in seq_along(uvals)) {
+    key_vec[!is_na & by_vec == uvals[i]] <- code_strs[i]
+  }
+
+  level_keys    <- code_strs
+  level_headers <- paste0(hdr_name, " = ", code_strs)
+
+  if (missing && any(is_na)) {
+    level_keys    <- c(level_keys, ".")
+    level_headers <- c(level_headers, paste0(hdr_name, " = ."))
+    key_vec[is_na] <- "."
+  }
+
+  list(level_keys = level_keys, level_headers = level_headers,
+       key_vec = key_vec)
+}
+
+
+# --- Haven-labelled by-variable ------------------------------------------
+.ct_by_haven <- function(by_vec, hdr_name, missing, has_haven) {
+  haven_labels <- attr(by_vec, "labels", exact = TRUE)
+
+  # code -> label lookup
+  if (!is.null(haven_labels) && length(haven_labels) > 0L) {
+    code_to_label <- stats::setNames(names(haven_labels),
+                                     as.character(haven_labels))
+  } else {
+    code_to_label <- character(0)
+  }
+
+  # Tagged NA detection
+  if (has_haven) {
+    is_tagged <- haven::is_tagged_na(by_vec)
+    na_tags   <- ifelse(is_tagged, haven::na_tag(by_vec), NA_character_)
+  } else {
+    is_tagged <- rep(FALSE, length(by_vec))
+    na_tags   <- rep(NA_character_, length(by_vec))
+  }
+  is_regular_na <- is.na(by_vec) & !is_tagged
+
+  # Non-missing, non-tagged values
+  non_na_non_tagged <- (!is.na(by_vec)) & (!is_tagged)
+  uvals <- sort(unique(as.numeric(by_vec[non_na_non_tagged])))
+
+  level_keys    <- character(0)
+  level_headers <- character(0)
+  key_vec       <- rep(NA_character_, length(by_vec))
+
+  for (v in uvals) {
+    code_str <- if (v == as.integer(v)) {
+      as.character(as.integer(v))
+    } else {
+      as.character(v)
+    }
+
+    lbl <- code_to_label[code_str]
+    if (is.na(lbl)) lbl <- NULL
+
+    header <- if (!is.null(lbl) && nzchar(lbl)) {
+      paste0(hdr_name, " = ", code_str, " [", lbl, "]")
+    } else {
+      paste0(hdr_name, " = ", code_str)
+    }
+
+    level_keys    <- c(level_keys, code_str)
+    level_headers <- c(level_headers, header)
+
+    mask <- non_na_non_tagged & as.numeric(by_vec) == v
+    key_vec[mask] <- code_str
+  }
+
+  # Tagged NAs (only when missing=TRUE)
+  if (missing && has_haven && any(is_tagged)) {
+    unique_tags <- sort(unique(na_tags[is_tagged]))
+    for (tag in unique_tags) {
+      tag_code  <- paste0(".", tag)
+      tag_label <- NA_character_
+      if (!is.null(haven_labels)) {
+        for (j in seq_along(haven_labels)) {
+          if (haven::is_tagged_na(haven_labels[j]) &&
+              haven::na_tag(haven_labels[j]) == tag) {
+            tag_label <- names(haven_labels)[j]
+            break
+          }
+        }
+      }
+
+      header <- if (!is.na(tag_label) && nzchar(tag_label)) {
+        paste0(hdr_name, " = ", tag_code, " [", tag_label, "]")
+      } else {
+        paste0(hdr_name, " = ", tag_code)
+      }
+
+      level_keys    <- c(level_keys, tag_code)
+      level_headers <- c(level_headers, header)
+
+      mask <- is_tagged & na_tags == tag
+      key_vec[mask] <- tag_code
+    }
+  }
+
+  # Regular NA (only when missing=TRUE)
+  if (missing && any(is_regular_na)) {
+    level_keys    <- c(level_keys, ".")
+    level_headers <- c(level_headers, paste0(hdr_name, " = ."))
+    key_vec[is_regular_na] <- "."
+  }
+
+  list(level_keys = level_keys, level_headers = level_headers,
+       key_vec = key_vec)
 }
