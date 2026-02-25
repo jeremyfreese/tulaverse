@@ -28,6 +28,9 @@ distinct input types:
 - **Data frames / vectors** (the "summarize path"): Stata `-summarize`-style
   descriptive statistics table.
 
+`tulatab()` is a standalone exported function (not dispatched through `tula()`)
+that produces Stata-style one-way frequency tables (the "tabulate path").
+
 ---
 
 ## File map
@@ -49,6 +52,8 @@ distinct input types:
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
 | `R/robust.R` | `.resolve_robust_vcov()`, `.recompute_ct_robust()`, `.robust_ci()` |
+| `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `.extract_var_name()` |
+| `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.truncate_tab_label()` |
 
 ---
 
@@ -754,6 +759,81 @@ for side-by-side outcome/quantile columns. The shared renderer is
 it works for any block-based output). Each column shows the coefficient with
 significance stars (`*` p<0.05, `**` p<0.01, `***` p<0.001`). SE, statistic,
 and p-value are not shown in parallel mode.
+
+---
+
+## Tabulate path architecture (`tulatab()`)
+
+`tulatab()` produces Stata-style one-way frequency tables. It is a standalone
+exported function (not dispatched through the `tula()` generic).
+
+### Entry point
+
+```r
+tulatab(x, data = NULL, missing = FALSE, sort = FALSE,
+        value = TRUE, label = TRUE, width = NULL, ...)
+```
+
+Two calling conventions:
+- `tulatab(df$varname)` — direct vector
+- `tulatab(varname, data = df)` — NSE lookup
+
+### Variable types and Cum column
+
+| Type | Cum? | Default order |
+|------|------|---------------|
+| Ordered factor | Yes | Level order |
+| Unordered factor | No | Level order |
+| Character | No | Alphabetical |
+| Numeric | Yes | Ascending |
+| Haven labelled | Yes | Ascending numeric value |
+
+### Haven display parameters
+
+| `value` | `label` | Display |
+|---------|---------|---------|
+| TRUE | TRUE | `1 Strong Democrat` (code + label, whitespace separated) |
+| TRUE | FALSE | `1` (code only) |
+| FALSE | TRUE | `Strong Democrat` (label only) |
+| FALSE | FALSE | `1` (falls back to code) |
+
+### The tab_df structure (7 columns)
+
+```
+value      chr   display string
+num_value  dbl   raw numeric (haven/numeric; NA for factor/character)
+label      chr   haven value label (NA if none)
+freq       int   count
+percent    dbl   percentage (0-100)
+cum        dbl   cumulative % (NA if show_cum is FALSE)
+is_missing lgl   TRUE for NA / tagged NA rows
+```
+
+Total row computed at print time, NOT stored in tab_df.
+
+### Formatting details
+
+- Percentages: exactly 2 decimal places (`sprintf("%.2f", x)`)
+- Freq: comma-formatted integers, right-aligned, 10 chars wide
+- Separator uses `+` at pipe position (Stata tab convention)
+- Label truncation: simple right-truncation with `~` as last character
+  (via `.truncate_tab_label()`, distinct from `.truncate_label()` which
+  uses word-boundary logic for regression output)
+- Haven variable label (`attr(x, "label")`) used in header when available
+
+### S3 object: tula_tab
+
+```r
+list(tab_df, var_name, var_type, show_cum,
+     has_haven_labels, has_haven_values,
+     var_label, width, missing, value, label)
+```
+
+### Dependencies
+
+`haven` is in Suggests (not Imports). Haven-labelled detection uses
+`inherits(vec, "haven_labelled")` which works without loading haven.
+Tagged NA handling requires `haven::is_tagged_na()` and `haven::na_tag()`.
 
 ---
 
