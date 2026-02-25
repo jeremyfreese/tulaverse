@@ -1,9 +1,10 @@
 #' @rdname tula
 #' @export
 tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                    width = NULL, exp = FALSE, level = 95, ...) {
+                    width = NULL, exp = FALSE, level = 95,
+                    robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
-  wide <- .resolve_wide(wide, width)
+  wide  <- .resolve_wide(wide, width)
 
   tau   <- model$tau
   n_obs <- length(model$residuals)
@@ -18,14 +19,22 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ct <- s$coefficients
   colnames(ct) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
 
-  # CIs via summary with covariance = TRUE for Wald-type intervals
-  ci <- if (wide) {
-    z_crit <- stats::qnorm(0.5 + level / 200)
-    cbind(
-      "2.5 %"  = ct[, "Estimate"] - z_crit * ct[, "Std. Error"],
-      "97.5 %" = ct[, "Estimate"] + z_crit * ct[, "Std. Error"]
-    )
-  } else NULL
+  # Apply robust SE if requested
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+    ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, "t", df = df_resid)
+    ci <- if (wide) .robust_ci(ct, level, "t", df = df_resid) else NULL
+  } else {
+    # Wald-type CIs using model SEs
+    ci <- if (wide) {
+      z_crit <- stats::qnorm(0.5 + level / 200)
+      cbind(
+        "2.5 %"  = ct[, "Estimate"] - z_crit * ct[, "Std. Error"],
+        "97.5 %" = ct[, "Estimate"] + z_crit * ct[, "Std. Error"]
+      )
+    } else NULL
+  }
 
   # Header metrics
   # Raw sum of deviations (sum of weighted absolute residuals for fitted model)
@@ -67,6 +76,9 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   header_right <- c(
     "Number of obs" = n_obs
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # Family label: "Median regression" for tau=0.5, else "90th Quantile regression"
   family_label <- .rq_family_label(tau)
@@ -117,7 +129,8 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     value_fmts   = c("Raw sum of dev" = "f3", "Min sum of dev" = "f3"),
     exp          = exp,
     dep_var      = dep_var,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }
 
@@ -126,7 +139,8 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 #' @export
 tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                      width = NULL, exp = FALSE, level = 95,
-                     parallel = FALSE, ...) {
+                     parallel = FALSE,
+                     robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
   wide <- .resolve_wide(wide, width)
 
@@ -156,24 +170,40 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   opts <- .parse_tula_opts(ref, label)
 
+  # Pre-check if sandwich is available when robust SEs are requested,
+  # to fail early with a clear error before the per-block loop.
+  needs_robust <- isTRUE(robust) || !is.null(vcov) || !is.null(cluster)
+  if (needs_robust && !requireNamespace("sandwich", quietly = TRUE)) {
+    stop(
+      "Package 'sandwich' is required for robust standard errors.\n",
+      "Install it with: install.packages(\"sandwich\")",
+      call. = FALSE
+    )
+  }
+
   # Build one block per quantile
   blocks <- lapply(seq_along(taus), function(k) {
     tau_k <- taus[k]
 
     # Extract single-quantile coefficients
-    coef_k <- model$coefficients[, k]
+    coef_k  <- model$coefficients[, k]
     resid_k <- model$residuals[, k]
 
-    # Fit summary for this quantile
-    # Build a lightweight single-tau rq object for summary
-    s_k <- tryCatch({
-      single_rq <- model
-      single_rq$tau <- tau_k
-      single_rq$coefficients <- coef_k
-      single_rq$residuals <- resid_k
-      class(single_rq) <- "rq"
-      summary(single_rq, se = "nid")
+    # Build a lightweight single-tau rq object for summary.
+    # Construction and summary are separated so single_rq is available both
+    # for summary() and for .resolve_robust_vcov() below.
+    single_rq <- tryCatch({
+      r <- model
+      r$tau          <- tau_k
+      r$coefficients <- coef_k
+      r$residuals    <- resid_k
+      class(r)       <- "rq"
+      r
     }, error = function(e) NULL)
+
+    s_k <- if (!is.null(single_rq)) {
+      tryCatch(summary(single_rq, se = "nid"), error = function(e) NULL)
+    } else NULL
 
     if (is.null(s_k)) {
       # Fallback: basic coefficient matrix without SEs
@@ -188,12 +218,30 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       colnames(ct_k) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
     }
 
-    ci_k <- if (wide) {
-      z_crit <- stats::qnorm(0.5 + level / 200)
-      cbind(
-        "2.5 %"  = ct_k[, "Estimate"] - z_crit * ct_k[, "Std. Error"],
-        "97.5 %" = ct_k[, "Estimate"] + z_crit * ct_k[, "Std. Error"]
+    # Apply robust SE per quantile if requested
+    robust_info_k <- NULL
+    if (needs_robust && !is.null(single_rq)) {
+      robust_info_k <- tryCatch(
+        .resolve_robust_vcov(single_rq, robust, vcov, cluster),
+        error = function(e) NULL
       )
+      if (!is.null(robust_info_k)) {
+        df_k  <- tryCatch(stats::df.residual(single_rq), error = function(e) Inf)
+        ct_k  <- .recompute_ct_robust(ct_k, robust_info_k$vcov_mat, "t", df = df_k)
+      }
+    }
+
+    ci_k <- if (wide) {
+      if (!is.null(robust_info_k)) {
+        df_k <- tryCatch(stats::df.residual(single_rq), error = function(e) Inf)
+        .robust_ci(ct_k, level, "t", df = df_k)
+      } else {
+        z_crit <- stats::qnorm(0.5 + level / 200)
+        cbind(
+          "2.5 %"  = ct_k[, "Estimate"] - z_crit * ct_k[, "Std. Error"],
+          "97.5 %" = ct_k[, "Estimate"] + z_crit * ct_k[, "Std. Error"]
+        )
+      }
     } else NULL
 
     coef_df <- build_coef_df(
@@ -213,12 +261,43 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     list(outcome = .rq_short_label(tau_k), coef_df = coef_df, tau = tau_k)
   })
 
+  # Derive se_label and cluster_n from the first block's robust_info (if any).
+  # We re-check needs_robust here; if sandwich failed in all blocks, se_label
+  # stays NULL (output falls back to "Std. Err." automatically).
+  rqs_se_label  <- NULL
+  rqs_cluster_n <- NULL
+  if (needs_robust) {
+    # Build a representative single-tau rq for the first quantile to get
+    # se_label and cluster_n without repeating the full per-block logic.
+    rep_rq <- tryCatch({
+      r <- model
+      r$tau          <- taus[1L]
+      r$coefficients <- model$coefficients[, 1L]
+      r$residuals    <- model$residuals[, 1L]
+      class(r)       <- "rq"
+      r
+    }, error = function(e) NULL)
+    if (!is.null(rep_rq)) {
+      rep_ri <- tryCatch(
+        .resolve_robust_vcov(rep_rq, robust, vcov, cluster),
+        error = function(e) NULL
+      )
+      if (!is.null(rep_ri)) {
+        rqs_se_label  <- rep_ri$se_label
+        rqs_cluster_n <- rep_ri$cluster_n
+      }
+    }
+  }
+
   # Shared header: aggregate across all quantiles is not standard.
   # Show the range of quantiles and N.
   # For the header, show stats for the first quantile (user can see per-block).
   # Actually, follow Stata: shared header has only N.
   header_left  <- numeric(0)
   header_right <- c("Number of obs" = n_obs)
+  if (!is.null(rqs_cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = rqs_cluster_n)
+  }
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
@@ -237,7 +316,8 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     parallel     = isTRUE(parallel),
     dep_var      = dep_var,
     level        = level,
-    family_label = family_label
+    family_label = family_label,
+    se_label     = rqs_se_label
   )
 }
 
@@ -300,7 +380,8 @@ new_tula_rqs_output <- function(header_left,
                                  parallel     = FALSE,
                                  dep_var      = NULL,
                                  level        = 95,
-                                 family_label = NULL) {
+                                 family_label = NULL,
+                                 se_label     = NULL) {
   structure(
     list(
       header_left  = header_left,
@@ -314,7 +395,8 @@ new_tula_rqs_output <- function(header_left,
       parallel     = parallel,
       dep_var      = dep_var,
       level        = level,
-      family_label = family_label
+      family_label = family_label,
+      se_label     = se_label
     ),
     class = "tula_rqs_output"
   )
@@ -394,7 +476,8 @@ print.tula_rqs_output <- function(x, ...) {
                                        total_width = total_width,
                                        exp       = isTRUE(x$exp),
                                        exp_label = NULL,
-                                       level     = x$level %||% 95L)
+                                       level     = x$level %||% 95L,
+                                       se_label  = x$se_label)
       inner_lines <- table_lines[-c(1L, length(table_lines))]
 
       # Embed quantile label in the label-column area

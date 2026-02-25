@@ -1,15 +1,16 @@
 #' @rdname tula
 #' @export
 tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                     width = NULL, exp = FALSE, level = 95, ...) {
+                     width = NULL, exp = FALSE, level = 95,
+                     robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
-  wide   <- .resolve_wide(wide, width)
-  s      <- summary(model)
-  n_obs  <- stats::nobs(model)
-  ll     <- as.numeric(stats::logLik(model))
+  wide  <- .resolve_wide(wide, width)
+  s     <- summary(model)
+  n_obs <- stats::nobs(model)
+  ll    <- as.numeric(stats::logLik(model))
 
   # Pseudo-R² measures
-  dev     <- model$deviance
+  dev      <- model$deviance
   null_dev <- model$null.deviance
   n        <- n_obs
 
@@ -28,6 +29,23 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   lnk <- model$family$link
   family_label <- paste0("Family: ", fam, " / Link: ", lnk)
 
+  # Coefficient matrix; stat_label determined before robust adjustment
+  ct          <- stats::coef(s)
+  stat_col_nm <- colnames(ct)[3L]
+  stat_label  <- if (grepl("^z", stat_col_nm, ignore.case = TRUE)) "z" else "t"
+
+  # Apply robust SE if requested
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+    ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, stat_label, df = df_resid)
+    ci <- if (wide) .robust_ci(ct, level, stat_label, df = df_resid) else NULL
+  } else {
+    # Use Wald CIs (confint.default) for speed; avoids slow profile likelihood
+    # and matches Stata's default for logistic/Poisson regression
+    ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  }
+
   # Left header block
   header_left <- c(
     AIC              = stats::AIC(model),
@@ -37,25 +55,16 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   # Right header block
   header_right <- c(
-    "Number of obs"  = n_obs,
-    "McFadden R-sq"  = mcfadden,
+    "Number of obs"   = n_obs,
+    "McFadden R-sq"   = mcfadden,
     "Nagelkerke R-sq" = nagelkerke
   )
-
-  # Coefficient matrix
-  ct <- stats::coef(s)
-
-  # Use Wald CIs (confint.default) for speed; avoids slow profile likelihood
-  # and matches Stata's default for logistic/Poisson regression
-  ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   opts    <- .parse_tula_opts(ref, label)
   coef_df <- build_coef_df(model, ct, ci, wide, ref = opts$ref, label = opts$label)
-
-  # Determine stat label from the summary matrix column name
-  # Gaussian glm uses t; all other families use z
-  stat_col_nm <- colnames(ct)[3L]
-  stat_label  <- if (grepl("^z", stat_col_nm, ignore.case = TRUE)) "z" else "t"
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
@@ -71,6 +80,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
     exp          = exp,
     dep_var      = dep_var,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }

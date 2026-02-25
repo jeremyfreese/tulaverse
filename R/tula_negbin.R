@@ -1,9 +1,10 @@
 #' @rdname tula
 #' @export
 tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                        width = NULL, exp = FALSE, level = 95, ...) {
+                        width = NULL, exp = FALSE, level = 95,
+                        robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
-  wide <- .resolve_wide(wide, width)
+  wide  <- .resolve_wide(wide, width)
 
   s     <- summary(model)
   n_obs <- stats::nobs(model)
@@ -11,8 +12,16 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # --- ct: standard 4-column coefficient matrix (z-based) -------------------
   ct <- stats::coef(s)   # Estimate, Std. Error, z value, Pr(>|z|)
 
-  # --- ci: Wald confidence intervals (fast, matches Stata default) ----------
-  ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  # Apply robust SE if requested
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+    ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, "z", df = df_resid)
+    ci <- if (wide) .robust_ci(ct, level, "z", df = df_resid) else NULL
+  } else {
+    # --- ci: Wald confidence intervals (fast, matches Stata default) ----------
+    ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  }
 
   # --- Log-likelihood and McFadden R-sq -------------------------------------
   ll <- as.numeric(stats::logLik(model))
@@ -36,6 +45,9 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Number of obs" = n_obs,
     "McFadden R-sq" = mcfadden
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # --- Family label ---------------------------------------------------------
   family_label <- paste0("Family: Negative Binomial / Link: ", model$family$link)
@@ -94,6 +106,7 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     exp          = exp,
     exp_label    = if (isTRUE(exp)) "IRR" else NULL,
     ancillary_df = ancillary_df,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }

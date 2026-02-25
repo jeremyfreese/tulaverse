@@ -1,7 +1,8 @@
 #' @rdname tula
 #' @export
 tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                      width = NULL, exp = FALSE, level = 95, ...) {
+                      width = NULL, exp = FALSE, level = 95,
+                      robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
   wide <- .resolve_wide(wide, width)
 
@@ -39,11 +40,21 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   rownames(ct_zeta) <- zeta_names
 
+  # Apply robust SE if requested (uses full var-cov covering all params)
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    v_use <- robust_info$vcov_mat
+    ct    <- .recompute_ct_robust(ct, v_use, "z")
+    # Update cutpoint SEs from robust vcov
+    ct_zeta[, "Std. Error"] <- sqrt(diag(v_use)[zeta_names])
+  } else {
+    v_use <- stats::vcov(model)   # full var-cov for all params (model SEs)
+  }
+
   # Wald confidence intervals via vcov (covers both predictors and cutpoints)
   if (wide) {
-    v      <- stats::vcov(model)   # full var-cov for all params
     z_crit <- stats::qnorm(0.5 + level / 200)
-    ses    <- sqrt(diag(v))
+    ses    <- sqrt(diag(v_use))
 
     ci_pred <- cbind(
       "2.5 %"  = ct[, "Estimate"]      - z_crit * ses[pred_names],
@@ -82,6 +93,9 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Number of obs" = n,
     "McFadden R-sq" = pseudo_r2
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # Extract design matrix info explicitly.
   # model.matrix() on a polr object includes an intercept column (assign = 0)
@@ -137,6 +151,7 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     exp            = exp,
     dep_var        = dep_var,
     level          = level,
-    outcome_levels = model$lev
+    outcome_levels = model$lev,
+    se_label       = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }

@@ -846,3 +846,92 @@ tryCatch(
   error = function(e) cat("Error caught as expected:\n", conditionMessage(e), "\n")
 )
 ```
+
+# Robust standard errors
+
+## Test 64 — HC3 robust SEs for lm (narrow, no CIs)
+
+**Expected:** SE column header reads `Robust S.E.` instead of `Std. Err.`.
+SE values differ from the standard model SEs. No CI columns (wide = FALSE).
+
+```{r}
+m_rob <- lm(mpg ~ cyl + wt + hp, data = mtcars)
+tula(m_rob, wide = FALSE, robust = TRUE)
+```
+
+## Test 65 — HC3 robust SEs for lm with wide = TRUE
+
+**Expected:** Header still shows `Robust S.E.`. CI columns appear using
+critical values derived from the robust SEs (Wald CIs based on HC3 SEs).
+
+```{r}
+tula(m_rob, wide = TRUE, robust = TRUE)
+```
+
+## Test 66 — HC4 override via vcov parameter
+
+**Expected:** SE column header reads `Robust S.E.`. Values should differ
+slightly from HC3 (Test 64) because HC4 applies a stronger bias correction.
+
+```{r}
+tula(m_rob, wide = FALSE, vcov = "HC4")
+```
+
+## Test 67 — Cluster-robust SEs with cluster = "cyl"
+
+**Expected:** SE column header reads `Clust. S.E.`. Header right block shows
+`Num. clusters = 3` (mtcars has cyl ∈ {4, 6, 8}). SEs reflect clustering.
+
+```{r}
+tula(m_rob, wide = FALSE, cluster = "cyl")
+```
+
+## Test 68 — Cluster-robust SEs with wide output
+
+**Expected:** `Clust. S.E.` header, `Num. clusters = 3` in header, and CI
+columns based on cluster-robust SEs.
+
+```{r}
+tula(m_rob, wide = TRUE, cluster = "cyl")
+```
+
+## Test 69 — Robust SEs for logistic regression
+
+**Expected:** SE column header reads `Robust S.E.`. Family/link line printed.
+McFadden/Nagelkerke R-sq unchanged (still based on the original fitted model).
+
+```{r}
+m_logit <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+tula(m_logit, wide = FALSE, robust = TRUE)
+```
+
+## Test 70 — Cluster-robust SEs for logistic regression
+
+**Expected:** `Clust. S.E.` header, `Num. clusters = 3`, CI columns.
+Robust and exp = TRUE can be combined: SEs differ from model SEs.
+
+```{r}
+tula(m_logit, wide = TRUE, cluster = "cyl", exp = TRUE)
+```
+
+## Test 71 — Robust SEs for Cox proportional hazards
+
+**Expected:** `Robust S.E.` header. Hazard ratios displayed (exp = TRUE default).
+All other Cox-specific header stats unchanged.
+
+```{r}
+library(survival)
+m_cox <- coxph(Surv(time, status) ~ age + sex, data = lung)
+tula(m_cox, wide = FALSE, robust = TRUE)
+```
+
+## Test 72 — Error when sandwich not installed (simulated)
+
+**Expected:** If `sandwich` is available, robust = TRUE works. This test verifies
+the error path by manually checking; in practice the error fires when sandwich
+is absent. Here we just confirm robust = TRUE succeeds when sandwich IS installed.
+
+```{r}
+cat("sandwich available:", requireNamespace("sandwich", quietly = TRUE), "\n")
+tula(m_rob, wide = FALSE, robust = TRUE)
+```

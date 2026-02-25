@@ -36,6 +36,7 @@ distinct input types:
 | `R/header.R` | `format_header()`, `compute_total_width()` |
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
+| `R/robust.R` | `.resolve_robust_vcov()`, `.recompute_ct_robust()`, `.robust_ci()` |
 
 ---
 
@@ -103,7 +104,8 @@ list(
   exp_label      = NULL,           # character or NULL; replaces "exp(b)" header (e.g. "IRR")
   ancillary_df   = NULL,           # data.frame or NULL; ancillary parameter rows (e.g. negbin alpha)
   level          = 95,             # numeric; CI width as percentage (e.g. 95, 90, 99)
-  outcome_levels = NULL            # character vector or NULL; ordered regression level names for footer
+  outcome_levels = NULL,           # character vector or NULL; ordered regression level names for footer
+  se_label       = NULL            # character or NULL; overrides "Std. Err." header (e.g. "Robust S.E.")
 )
 ```
 
@@ -188,6 +190,107 @@ or `print.tula_output()` are needed.
 
 ---
 
+## Robust standard errors (`robust`, `vcov`, `cluster`)
+
+### Overview
+
+All regression methods accept three new parameters for sandwich-based robust
+standard errors. These require the `sandwich` package (in Suggests, not Imports).
+
+| Parameter | Type | Effect |
+|-----------|------|--------|
+| `robust = TRUE` | logical | HC3 heteroskedasticity-robust SEs (default type) |
+| `vcov = "HC4"` | character | HC type override (any type accepted by `sandwich::vcovHC()`) |
+| `vcov = matrix` | matrix | Pre-computed vcov matrix used directly |
+| `cluster = "var"` | character | Cluster-robust SEs; variable name in model frame or data |
+
+`cluster` implies `robust = TRUE` regardless of the `robust` argument.
+
+### Three internal helpers (`R/robust.R`)
+
+```r
+.resolve_robust_vcov(model, robust, vcov_arg, cluster_arg)
+  → NULL if no robust adjustment needed
+  → list(vcov_mat, se_label, cluster_n) otherwise
+
+.recompute_ct_robust(ct, vcov_mat, stat_label, df = Inf)
+  → updated ct matrix (columns 2, 3, 4 replaced)
+
+.robust_ci(ct, level, stat_label, df = Inf)
+  → 2-column CI matrix with same rownames as ct
+```
+
+### Pipeline in each method
+
+After extracting `ct` (and determining `stat_label`), before calling
+`build_coef_df()`:
+
+```r
+robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+if (!is.null(robust_info)) {
+  df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+  ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, stat_label, df = df_resid)
+  ci <- if (wide) .robust_ci(ct, level, stat_label, df = df_resid) else NULL
+} else {
+  ci <- if (wide) confint(model, level = level / 100) else NULL
+}
+if (!is.null(robust_info$cluster_n)) {
+  header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+}
+```
+
+Then pass `se_label = if (!is.null(robust_info)) robust_info$se_label else NULL`
+to `new_tula_output()`.
+
+### SE column header
+
+`se_label` flows through the object to `format_coef_table()`. When non-NULL
+and `exp = FALSE`, it replaces `"Std. Err."` in the column header:
+
+```
+se_hdr <- if (exp) "DMSE" else (se_label %||% "Std. Err.")
+```
+
+### Ordered models (polr, clm) — special handling
+
+These models have both predictor `ct` and cutpoint `ct_zeta`. The robust vcov
+covers all parameters. The method:
+1. Applies `.recompute_ct_robust()` to predictor `ct`.
+2. Updates `ct_zeta[, "Std. Error"]` directly from `sqrt(diag(v_use)[zeta_names])`.
+3. Uses `v_use` (the robust or model vcov) for both predictor and cutpoint CIs.
+
+### Multinom — per-outcome submatrix extraction
+
+The `sandwich` vcov for multinom covers all outcome-level coefficients. Names
+follow the convention `"outcome:predictor"` (e.g., `"6:(Intercept)"`). The
+`tula.multinom()` method extracts per-outcome submatrices using
+`paste0(lv, ":", pred_names)`. If the naming doesn't match (unexpected vcov
+structure), a warning is emitted and model SEs are used for that outcome.
+
+### Quantile regression (rqs) — per-block application
+
+For `tula.rqs()`, robust SEs are applied per block using a lightweight
+single-tau `rq` object constructed per quantile. A representative
+`robust_info` is also computed before the loop for `se_label` and `cluster_n`.
+
+### Graceful error for unsupported models
+
+If `sandwich::vcovHC()` or `vcovCL()` does not support the model class,
+`.resolve_robust_vcov()` stops with an informative message:
+```
+sandwich::vcovHC() does not support models of class 'clm'.
+Robust SEs are not available for this model type.
+```
+
+### Ancillary parameters and `exp = TRUE`
+
+Robust SEs do NOT affect ancillary parameter rows (e.g., negbin `/lnalpha`
+and `alpha`). These are always computed from the model's own dispersion
+parameter SEs. The `exp = TRUE` transformation is independent of robust SEs —
+both can be used simultaneously (`exp = TRUE, robust = TRUE`).
+
+---
+
 ## Negative binomial (`MASS::glm.nb`)
 
 ### Key structural features
@@ -231,24 +334,39 @@ Minimal template:
 #' @rdname tula
 #' @export
 tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                           width = NULL, exp = FALSE, level = 95, ...) {
+                           width = NULL, exp = FALSE, level = 95,
+                           robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
-  wide <- .resolve_wide(wide, width)
+  wide  <- .resolve_wide(wide, width)
 
   s     <- summary(model)
 
   # --- ct: coefficient matrix (Estimate, SE, statistic, p-value) -----------
   ct <- s$coefficients[ , 1:4, drop = FALSE]
 
-  # --- ci: confidence intervals or NULL ------------------------------------
-  ci <- if (wide) confint(model, level = level / 100) else NULL
+  # --- stat label (determine before robust adjustment) ----------------------
+  stat_label <- if (grepl("^z", colnames(ct)[3L], ignore.case = TRUE)) "z" else "t"
+
+  # --- robust SE (optional; requires sandwich in Suggests) ------------------
+  # sandwich::vcovHC() and vcovCL() support this model type: YES/NO
+  # (Update this comment when implementing; if NO, robust args are silently
+  # ignored because .resolve_robust_vcov() will error with a clear message.)
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+    ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, stat_label, df = df_resid)
+    ci <- if (wide) .robust_ci(ct, level, stat_label, df = df_resid) else NULL
+  } else {
+    # --- ci: confidence intervals or NULL ------------------------------------
+    ci <- if (wide) confint(model, level = level / 100) else NULL
+  }
 
   # --- Header metrics -------------------------------------------------------
   header_left  <- c(AIC = AIC(model), BIC = BIC(model))
   header_right <- c("Number of obs" = nobs(model))
-
-  # --- Stat label -----------------------------------------------------------
-  stat_label <- if (grepl("^z", colnames(ct)[3L], ignore.case = TRUE)) "z" else "t"
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # --- Coef data frame ------------------------------------------------------
   opts    <- .parse_tula_opts(ref, label)
@@ -269,7 +387,8 @@ tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     width        = width,
     exp          = exp,
     dep_var      = dep_var,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }
 ```
@@ -402,9 +521,12 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 | `wide` | NULL | regression | Show CI columns (NULL = auto based on width ≥ 80) |
 | `ref` | FALSE | regression | Show reference level rows |
 | `label` | TRUE | regression | Use haven value labels |
-| `exp` | FALSE | regression | Exponentiate coefficients; show exp(b) and DMSE; suppress CIs |
+| `exp` | FALSE | regression | Exponentiate coefficients; show exp(b) and DMSE; CIs also exponentiated |
 | `level` | 95 | regression | CI width as percentage (e.g. 90, 95, 99); also accepts 0–1 scale |
 | `parallel` | FALSE | multinom/rqs | Side-by-side outcome columns instead of stacked blocks |
+| `robust` | FALSE | regression | HC3 heteroskedasticity-robust SEs; requires `sandwich` |
+| `vcov` | NULL | regression | HC type override (character, e.g. `"HC4"`) or pre-computed vcov matrix |
+| `cluster` | NULL | regression | Cluster-robust SEs; character variable name; implies `robust = TRUE` |
 | `width` | NULL (→ `getOption("width")`) | both | Total output width |
 | `sep` | 5L | summarize | Variables between separator lines |
 | `mad` | FALSE | summarize | Show MAD instead of SD |

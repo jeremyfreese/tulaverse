@@ -1,7 +1,8 @@
 #' @rdname tula
 #' @export
 tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                       width = NULL, exp = TRUE, level = 95, ...) {
+                       width = NULL, exp = TRUE, level = 95,
+                       robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
   wide  <- .resolve_wide(wide, width)
 
@@ -15,9 +16,17 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ct <- ct_raw[, c("coef", "se(coef)", "z", "Pr(>|z|)"), drop = FALSE]
   colnames(ct) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
 
-  # --- ci: Wald confidence intervals (on log-hazard scale) ------------------
-  # format_coef_table() exponentiates these when exp = TRUE.
-  ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  # Apply robust SE if requested
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
+    ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, "z", df = df_resid)
+    ci <- if (wide) .robust_ci(ct, level, "z", df = df_resid) else NULL
+  } else {
+    # --- ci: Wald confidence intervals (on log-hazard scale) ------------------
+    # format_coef_table() exponentiates these when exp = TRUE.
+    ci <- if (wide) stats::confint.default(model, level = level / 100) else NULL
+  }
 
   # --- Header metrics -------------------------------------------------------
   n_events <- s$nevent
@@ -47,6 +56,9 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     AIC             = stats::AIC(model),
     Concordance     = concordance
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # --- Family label ----------------------------------------------------------
   family_label <- paste0("Cox regression / Ties: ", model$method)
@@ -78,6 +90,7 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     exp          = exp,
     dep_var      = dep_var,
     exp_label    = if (isTRUE(exp)) "Haz. Ratio" else NULL,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }

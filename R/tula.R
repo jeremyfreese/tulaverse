@@ -72,7 +72,8 @@
 #' @export
 tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                 digits = 7L, exp = FALSE, level = 95, parallel = FALSE, ...) {
+                 digits = 7L, exp = FALSE, level = 95, parallel = FALSE,
+                 robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -151,7 +152,8 @@ new_tula_output <- function(model_type,
                             exp_label      = NULL,
                             ancillary_df   = NULL,
                             level          = 95,
-                            outcome_levels = NULL) {
+                            outcome_levels = NULL,
+                            se_label       = NULL) {
   structure(
     list(
       model_type     = model_type,
@@ -168,7 +170,8 @@ new_tula_output <- function(model_type,
       exp_label      = exp_label,
       ancillary_df   = ancillary_df,
       level          = level,
-      outcome_levels = outcome_levels
+      outcome_levels = outcome_levels,
+      se_label       = se_label
     ),
     class = "tula_output"
   )
@@ -247,7 +250,8 @@ new_tula_multinom_output <- function(header_left,
                                      exp        = FALSE,
                                      parallel   = FALSE,
                                      dep_var    = NULL,
-                                     level      = 95) {
+                                     level      = 95,
+                                     se_label   = NULL) {
   structure(
     list(
       header_left  = header_left,
@@ -261,7 +265,8 @@ new_tula_multinom_output <- function(header_left,
       exp          = exp,
       parallel     = parallel,
       dep_var      = dep_var,
-      level        = level
+      level        = level,
+      se_label     = se_label
     ),
     class = "tula_multinom_output"
   )
@@ -359,7 +364,8 @@ print.tula_multinom_output <- function(x, ...) {
                                        total_width = total_width,
                                        exp       = isTRUE(x$exp),
                                        exp_label = x$exp_label,
-                                       level     = x$level %||% 95L)
+                                       level     = x$level %||% 95L,
+                                       se_label  = x$se_label)
       # Drop first sep (replaced by sep_line below) and last sep (printed
       # manually after the loop so there is always a final separator before
       # the "Base outcome:" footer).
@@ -427,7 +433,8 @@ print.tula_output <- function(x, ...) {
                                    total_width = total_width,
                                    exp       = isTRUE(x$exp),
                                    exp_label = x$exp_label,
-                                   level     = lv)
+                                   level     = lv,
+                                   se_label  = x$se_label)
 
   # Embed the dependent variable name in the label-column area of the column
   # header row (table_lines[2]), mirroring the multinom outcome-label pattern.

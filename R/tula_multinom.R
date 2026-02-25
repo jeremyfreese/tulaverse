@@ -2,12 +2,13 @@
 #' @export
 tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                           width = NULL, exp = FALSE, level = 95,
-                          parallel = FALSE, ...) {
+                          parallel = FALSE,
+                          robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
-  wide <- .resolve_wide(wide, width)
-  s    <- summary(model)
-  mf   <- model.frame(model)
-  n   <- nrow(mf)
+  wide  <- .resolve_wide(wide, width)
+  s     <- summary(model)
+  mf    <- model.frame(model)
+  n     <- nrow(mf)
 
   # Outcome levels: all levels, first is the base
   all_lev  <- model$lev          # e.g. c("4", "6", "8")
@@ -25,7 +26,11 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                        dimnames = list(out_lev, names(se_mat)))
   }
 
+  # Compute robust vcov if requested (covers all outcome-level coefficients)
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+
   # z-statistics and two-tailed p-values (multinom summary doesn't compute them)
+  # When robust, these will be overridden per block using the robust vcov.
   z_mat <- coef_mat / se_mat
   p_mat <- 2 * stats::pnorm(-abs(z_mat))
 
@@ -33,7 +38,8 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # For binary outcomes (K=2), confint() returns a plain 2-D matrix instead
   # of a 3-D array; promote it to a 3-D array with a single named slice so
   # the per-block extraction code below works uniformly.
-  ci_arr <- if (wide) {
+  # (Used only when robust_info is NULL; robust CIs computed per-block below.)
+  ci_arr <- if (wide && is.null(robust_info)) {
     tryCatch({
       ci_raw <- confint(model, level = level / 100)
       if (is.matrix(ci_raw)) {
@@ -64,12 +70,15 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Number of obs" = n,
     "McFadden R-sq" = mcfadden
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # assign_vec, term_labels, data_classes, xlevels — extracted once and reused
   # across all outcome blocks (same design matrix for every outcome).
-  mm          <- model.matrix(model)
-  assign_vec  <- attr(mm, "assign")
-  term_labels <- attr(terms(model), "term.labels")
+  mm           <- model.matrix(model)
+  assign_vec   <- attr(mm, "assign")
+  term_labels  <- attr(terms(model), "term.labels")
   data_classes <- tryCatch(
     attr(terms(model), "dataClasses"),
     error = function(e) character(0)
@@ -88,11 +97,42 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       "Pr(>|z|)"   = p_mat[lv, ]
     )
 
-    # ci: 2-column matrix for this outcome level, or NULL
-    ci_lv <- if (!is.null(ci_arr)) ci_arr[ , , lv, drop = FALSE] |>
-                matrix(ncol = 2L,
-                       dimnames = list(rownames(ct_lv), c("2.5 %", "97.5 %")))
-              else NULL
+    # Apply robust SE per outcome block if requested.
+    # The full sandwich vcov for multinom covers all outcome-level params.
+    # Name convention is "outcome:predictor" — try to extract the submatrix.
+    ci_lv <- NULL
+    if (!is.null(robust_info)) {
+      pred_names     <- rownames(ct_lv)
+      names_in_vcov  <- paste0(lv, ":", pred_names)
+      if (all(names_in_vcov %in% rownames(robust_info$vcov_mat))) {
+        vcov_sub <- robust_info$vcov_mat[names_in_vcov, names_in_vcov, drop = FALSE]
+        rownames(vcov_sub) <- colnames(vcov_sub) <- pred_names
+        ct_lv <- .recompute_ct_robust(ct_lv, vcov_sub, "z")
+        if (wide) ci_lv <- .robust_ci(ct_lv, level, "z")
+      } else {
+        # Fall back to model SEs if naming doesn't match (with a warning)
+        warning(
+          "tula(): could not extract per-outcome robust vcov for outcome '", lv,
+          "' (unexpected coefficient naming in sandwich vcov). ",
+          "Using model SEs for this outcome.",
+          call. = FALSE
+        )
+        if (wide) {
+          z_crit <- stats::qnorm(0.5 + level / 200)
+          ci_lv  <- cbind(
+            "2.5 %"  = ct_lv[, "Estimate"] - z_crit * ct_lv[, "Std. Error"],
+            "97.5 %" = ct_lv[, "Estimate"] + z_crit * ct_lv[, "Std. Error"]
+          )
+          rownames(ci_lv) <- pred_names
+        }
+      }
+    } else {
+      # ci: 2-column matrix for this outcome level from the standard confint array
+      ci_lv <- if (!is.null(ci_arr)) ci_arr[ , , lv, drop = FALSE] |>
+                  matrix(ncol = 2L,
+                         dimnames = list(rownames(ct_lv), c("2.5 %", "97.5 %")))
+                else NULL
+    }
 
     coef_df <- build_coef_df(
       model        = model,
@@ -125,7 +165,8 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     exp          = exp,
     parallel     = isTRUE(parallel),
     dep_var      = dep_var,
-    level        = level
+    level        = level,
+    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }
 

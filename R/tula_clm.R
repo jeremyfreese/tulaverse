@@ -1,7 +1,8 @@
 #' @rdname tula
 #' @export
 tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                     width = NULL, exp = FALSE, level = 95, ...) {
+                     width = NULL, exp = FALSE, level = 95,
+                     robust = FALSE, vcov = NULL, cluster = NULL, ...) {
   level <- .resolve_level(level)
   wide <- .resolve_wide(wide, width)
 
@@ -19,12 +20,21 @@ tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ct      <- ct_all[beta_names,  , drop = FALSE]
   ct_zeta <- ct_all[alpha_names, , drop = FALSE]
 
+  # Apply robust SE if requested (uses full var-cov covering all params)
+  robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+  if (!is.null(robust_info)) {
+    v_use <- robust_info$vcov_mat
+    ct    <- .recompute_ct_robust(ct, v_use, "z")
+    # Update cutpoint SEs from robust vcov
+    ct_zeta[, "Std. Error"] <- sqrt(diag(v_use)[alpha_names])
+  } else {
+    v_use <- stats::vcov(model)
+  }
+
   # Wald CIs via vcov (covers both predictors and cutpoints uniformly)
   if (wide) {
-    v      <- stats::vcov(model)
-    z_crit <- stats::qnorm(0.5 + level / 200)
-    ses    <- sqrt(diag(v))
-
+    z_crit  <- stats::qnorm(0.5 + level / 200)
+    ses     <- sqrt(diag(v_use))
     all_est <- stats::coef(model)   # combined vector (alpha then beta)
 
     ci_pred <- cbind(
@@ -63,6 +73,9 @@ tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Number of obs" = n,
     "McFadden R-sq" = pseudo_r2
   )
+  if (!is.null(robust_info$cluster_n)) {
+    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
+  }
 
   # Extract design matrix info explicitly.
   # ordinal's model.matrix.clm() does NOT set the "assign" attribute, which
@@ -120,6 +133,7 @@ tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     exp            = exp,
     dep_var        = dep_var,
     level          = level,
-    outcome_levels = levels(model$model[[1L]])
+    outcome_levels = levels(model$model[[1L]]),
+    se_label       = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
 }

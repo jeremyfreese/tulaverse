@@ -546,7 +546,8 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'
 #' @return Character vector, one element per line.
 format_coef_table <- function(coef_df, stat_label, wide, total_width,
-                              exp = FALSE, exp_label = NULL, level = 95) {
+                              exp = FALSE, exp_label = NULL, level = 95,
+                              se_label = NULL) {
   # Fixed numeric column widths.
   # stat is 10 (was 8) so values like "-5.08e+06" don't overflow.
   # pval is 9 (was 8) for a little more breathing room around "P>|z|".
@@ -568,9 +569,10 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   # P-value column header label
   pval_hdr <- if (stat_label == "z") "P>|z|" else "P>|t|"
 
-  # Column header labels: change when exp = TRUE
+  # Column header labels: change when exp = TRUE or robust SE is used.
+  # exp = TRUE takes precedence for the SE header ("DMSE" overrides se_label).
   coef_hdr <- if (exp) (exp_label %||% "exp(b)") else "Coef."
-  se_hdr   <- if (exp) "DMSE"   else "Std. Err."
+  se_hdr   <- if (exp) "DMSE" else (se_label %||% "Std. Err.")
 
   # CI column header: format level as integer when it has no fractional part
   # (e.g. 95 → "[95% Conf", 99.9 → "[99.9% Conf")
