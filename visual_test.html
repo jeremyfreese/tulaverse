@@ -4301,7 +4301,7 @@ Supported classes: lm, glm, data.frame, and atomic vectors. </code></pre>
 <h1>Robust standard errors</h1>
 <section id="test-64-hc3-robust-ses-for-lm-narrow-no-cis" class="level2">
 <h2 class="anchored" data-anchor-id="test-64-hc3-robust-ses-for-lm-narrow-no-cis">Test 64 — HC3 robust SEs for lm (narrow, no CIs)</h2>
-<p><strong>Expected:</strong> SE column header reads <code>Robust S.E.</code> instead of <code>Std. Err.</code>. SE values differ from the standard model SEs. No CI columns (wide = FALSE).</p>
+<p><strong>Expected:</strong> SE column header reads <code>Robust SE</code> instead of <code>Std. Err.</code>. SE values differ from the standard model SEs. No CI columns (wide = FALSE).</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb225"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb225-1"><a href="#cb225-1" aria-hidden="true" tabindex="-1"></a>m_rob <span class="ot">&lt;-</span> <span class="fu">lm</span>(mpg <span class="sc">~</span> cyl <span class="sc">+</span> wt <span class="sc">+</span> hp, <span class="at">data =</span> mtcars)</span>
 <span id="cb225-2"><a href="#cb225-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_rob, <span class="at">wide =</span> <span class="cn">FALSE</span>, <span class="at">robust =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -4310,7 +4310,7 @@ Supported classes: lm, glm, data.frame, and atomic vectors. </code></pre>
 BIC = 162.805                    R-squared     = 0.8431
                                  Adj R-squared = 0.8263
 -------------------------------------------------------
-mpg         |     Coef. Robust S.E.          t     P&gt;|t|
+mpg         |     Coef.  Robust SE          t     P&gt;|t|
 -------------------------------------------------------
 cyl         |    -.9416      .5728     -1.644     .1114
 wt          |    -3.167      .8335       -3.8     .0007
@@ -4322,7 +4322,7 @@ hp          |   -.01804     .01045     -1.726     .0954
 </section>
 <section id="test-65-hc3-robust-ses-for-lm-with-wide-true" class="level2">
 <h2 class="anchored" data-anchor-id="test-65-hc3-robust-ses-for-lm-with-wide-true">Test 65 — HC3 robust SEs for lm with wide = TRUE</h2>
-<p><strong>Expected:</strong> Header still shows <code>Robust S.E.</code>. CI columns appear using critical values derived from the robust SEs (Wald CIs based on HC3 SEs).</p>
+<p><strong>Expected:</strong> Header still shows <code>Robust SE</code>. CI columns appear using critical values derived from the robust SEs (Wald CIs based on HC3 SEs).</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb227"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb227-1"><a href="#cb227-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_rob, <span class="at">wide =</span> <span class="cn">TRUE</span>, <span class="at">robust =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -4330,7 +4330,7 @@ hp          |   -.01804     .01045     -1.726     .0954
 BIC = 162.805                                          R-squared     = 0.8431
                                                        Adj R-squared = 0.8263
 -----------------------------------------------------------------------------
-mpg         |     Coef. Robust S.E.          t     P&gt;|t|  [95% Conf  Interval]
+mpg         |     Coef.  Robust SE          t     P&gt;|t|  [95% Conf  Interval]
 -----------------------------------------------------------------------------
 cyl         |    -.9416      .5728     -1.644     .1114     -2.115      .2317
 wt          |    -3.167      .8335       -3.8     .0007     -4.874      -1.46
@@ -4342,7 +4342,7 @@ hp          |   -.01804     .01045     -1.726     .0954    -.03945    .003375
 </section>
 <section id="test-66-hc4-override-via-vcov-parameter" class="level2">
 <h2 class="anchored" data-anchor-id="test-66-hc4-override-via-vcov-parameter">Test 66 — HC4 override via vcov parameter</h2>
-<p><strong>Expected:</strong> SE column header reads <code>Robust S.E.</code>. Values should differ slightly from HC3 (Test 64) because HC4 applies a stronger bias correction.</p>
+<p><strong>Expected:</strong> SE column header reads <code>Robust SE</code>. Values should differ slightly from HC3 (Test 64) because HC4 applies a stronger bias correction.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb229"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb229-1"><a href="#cb229-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_rob, <span class="at">wide =</span> <span class="cn">FALSE</span>, <span class="at">vcov =</span> <span class="st">&quot;HC4&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
@@ -4350,7 +4350,7 @@ hp          |   -.01804     .01045     -1.726     .0954    -.03945    .003375
 BIC = 162.805                    R-squared     = 0.8431
                                  Adj R-squared = 0.8263
 -------------------------------------------------------
-mpg         |     Coef. Robust S.E.          t     P&gt;|t|
+mpg         |     Coef.  Robust SE          t     P&gt;|t|
 -------------------------------------------------------
 cyl         |    -.9416      .5716     -1.647     .1107
 wt          |    -3.167      .8188     -3.868     .0006
@@ -4362,16 +4362,16 @@ hp          |   -.01804      .0132     -1.367     .1826
 </section>
 <section id="test-67-cluster-robust-ses-with-cluster-cyl" class="level2">
 <h2 class="anchored" data-anchor-id="test-67-cluster-robust-ses-with-cluster-cyl">Test 67 — Cluster-robust SEs with cluster = “cyl”</h2>
-<p><strong>Expected:</strong> SE column header reads <code>Clust. S.E.</code>. Header right block shows <code>Num. clusters = 3</code> (mtcars has cyl ∈ {4, 6, 8}). SEs reflect clustering.</p>
+<p><strong>Expected:</strong> SE column header reads <code>Clust. SE</code>. Header right block shows <code>Num. clusters = 3</code> (mtcars has cyl ∈ {4, 6, 8}). SEs reflect clustering.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb231"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb231-1"><a href="#cb231-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_rob, <span class="at">wide =</span> <span class="cn">FALSE</span>, <span class="at">cluster =</span> <span class="st">&quot;cyl&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>AIC = 155.477                    Number of obs =     32
-BIC = 162.805                    R-squared     = 0.8431
+BIC = 162.805                    Num. clusters =      3
+                                 R-squared     = 0.8431
                                  Adj R-squared = 0.8263
-                                 Num. clusters =      3
 -------------------------------------------------------
-mpg         |     Coef. Clust. S.E.          t     P&gt;|t|
+mpg         |     Coef.  Clust. SE          t     P&gt;|t|
 -------------------------------------------------------
 cyl         |    -.9416       .677     -1.391     .1752
 wt          |    -3.167      1.188     -2.667     .0126
@@ -4383,16 +4383,16 @@ hp          |   -.01804     .01124     -1.605     .1197
 </section>
 <section id="test-68-cluster-robust-ses-with-wide-output" class="level2">
 <h2 class="anchored" data-anchor-id="test-68-cluster-robust-ses-with-wide-output">Test 68 — Cluster-robust SEs with wide output</h2>
-<p><strong>Expected:</strong> <code>Clust. S.E.</code> header, <code>Num. clusters = 3</code> in header, and CI columns based on cluster-robust SEs.</p>
+<p><strong>Expected:</strong> <code>Clust. SE</code> header, <code>Num. clusters = 3</code> in header, and CI columns based on cluster-robust SEs.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb233"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb233-1"><a href="#cb233-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_rob, <span class="at">wide =</span> <span class="cn">TRUE</span>, <span class="at">cluster =</span> <span class="st">&quot;cyl&quot;</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>AIC = 155.477                                          Number of obs =     32
-BIC = 162.805                                          R-squared     = 0.8431
+BIC = 162.805                                          Num. clusters =      3
+                                                       R-squared     = 0.8431
                                                        Adj R-squared = 0.8263
-                                                       Num. clusters =      3
 -----------------------------------------------------------------------------
-mpg         |     Coef. Clust. S.E.          t     P&gt;|t|  [95% Conf  Interval]
+mpg         |     Coef.  Clust. SE          t     P&gt;|t|  [95% Conf  Interval]
 -----------------------------------------------------------------------------
 cyl         |    -.9416       .677     -1.391     .1752     -2.328      .4451
 wt          |    -3.167      1.188     -2.667     .0126       -5.6     -.7341
@@ -4404,7 +4404,7 @@ hp          |   -.01804     .01124     -1.605     .1197    -.04106    .004984
 </section>
 <section id="test-69-robust-ses-for-logistic-regression" class="level2">
 <h2 class="anchored" data-anchor-id="test-69-robust-ses-for-logistic-regression">Test 69 — Robust SEs for logistic regression</h2>
-<p><strong>Expected:</strong> SE column header reads <code>Robust S.E.</code>. Family/link line printed. McFadden/Nagelkerke R-sq unchanged (still based on the original fitted model).</p>
+<p><strong>Expected:</strong> SE column header reads <code>Robust SE</code>. Family/link line printed. McFadden/Nagelkerke R-sq unchanged (still based on the original fitted model).</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb235"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb235-1"><a href="#cb235-1" aria-hidden="true" tabindex="-1"></a>m_logit <span class="ot">&lt;-</span> <span class="fu">glm</span>(am <span class="sc">~</span> cyl <span class="sc">+</span> wt, <span class="at">data =</span> mtcars, <span class="at">family =</span> binomial)</span>
 <span id="cb235-2"><a href="#cb235-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_logit, <span class="at">wide =</span> <span class="cn">FALSE</span>, <span class="at">robust =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -4414,7 +4414,7 @@ AIC            = 20.731        Number of obs   =     32
 BIC            = 25.128        McFadden R-sq   = 0.6592
 Log likelihood = -7.365        Nagelkerke R-sq = 0.7957
 -------------------------------------------------------
-am          |     Coef. Robust S.E.          z     P&gt;|z|
+am          |     Coef.  Robust SE          z     P&gt;|z|
 -------------------------------------------------------
 cyl         |     1.322      1.049      1.259     .2079
 wt          |    -7.864       2.85      -2.76     .0058
@@ -4425,15 +4425,15 @@ wt          |    -7.864       2.85      -2.76     .0058
 </section>
 <section id="test-70-cluster-robust-ses-for-logistic-regression" class="level2">
 <h2 class="anchored" data-anchor-id="test-70-cluster-robust-ses-for-logistic-regression">Test 70 — Cluster-robust SEs for logistic regression</h2>
-<p><strong>Expected:</strong> <code>Clust. S.E.</code> header, <code>Num. clusters = 3</code>, CI columns. Robust and exp = TRUE can be combined: SEs differ from model SEs.</p>
+<p><strong>Expected:</strong> <code>Clust. SE</code> header, <code>Num. clusters = 3</code>, CI columns. Robust and exp = TRUE can be combined: SEs differ from model SEs.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb237"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb237-1"><a href="#cb237-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tula</span>(m_logit, <span class="at">wide =</span> <span class="cn">TRUE</span>, <span class="at">cluster =</span> <span class="st">&quot;cyl&quot;</span>, <span class="at">exp =</span> <span class="cn">TRUE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Family: binomial / Link: logit
 AIC            = 20.731                              Number of obs   =     32
-BIC            = 25.128                              McFadden R-sq   = 0.6592
-Log likelihood = -7.365                              Nagelkerke R-sq = 0.7957
-                                                     Num. clusters   =      3
+BIC            = 25.128                              Num. clusters   =      3
+Log likelihood = -7.365                              McFadden R-sq   = 0.6592
+                                                     Nagelkerke R-sq = 0.7957
 -----------------------------------------------------------------------------
 am          |    exp(b)       DMSE          z     P&gt;|z|  [95% Conf  Interval]
 -----------------------------------------------------------------------------
@@ -4446,7 +4446,7 @@ wt          |  .0003843    .001081     -2.797     .0052  1.554e-06     .09507
 </section>
 <section id="test-71-robust-ses-for-cox-proportional-hazards" class="level2">
 <h2 class="anchored" data-anchor-id="test-71-robust-ses-for-cox-proportional-hazards">Test 71 — Robust SEs for Cox proportional hazards</h2>
-<p><strong>Expected:</strong> <code>Robust S.E.</code> header. Hazard ratios displayed (exp = TRUE default). All other Cox-specific header stats unchanged.</p>
+<p><strong>Expected:</strong> <code>Robust SE</code> header. Hazard ratios displayed (exp = TRUE default). All other Cox-specific header stats unchanged.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb239"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb239-1"><a href="#cb239-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(survival)</span>
 <span id="cb239-2"><a href="#cb239-2" aria-hidden="true" tabindex="-1"></a>m_cox <span class="ot">&lt;-</span> <span class="fu">coxph</span>(<span class="fu">Surv</span>(time, status) <span class="sc">~</span> age <span class="sc">+</span> sex, <span class="at">data =</span> lung)</span>
@@ -4480,7 +4480,7 @@ sex       |     .5986     .09587     -3.204     .0014
 BIC = 162.805                    R-squared     = 0.8431
                                  Adj R-squared = 0.8263
 -------------------------------------------------------
-mpg         |     Coef. Robust S.E.          t     P&gt;|t|
+mpg         |     Coef.  Robust SE          t     P&gt;|t|
 -------------------------------------------------------
 cyl         |    -.9416      .5728     -1.644     .1114
 wt          |    -3.167      .8335       -3.8     .0007

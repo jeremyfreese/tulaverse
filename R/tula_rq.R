@@ -74,11 +74,9 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "K-B Pseudo R2"  = pseudo_r2
   )
   header_right <- c(
-    "Number of obs" = n_obs
+    "Number of obs" = n_obs,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n)
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # Family label: "Median regression" for tau=0.5, else "90th Quantile regression"
   family_label <- .rq_family_label(tau)
@@ -294,10 +292,10 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # For the header, show stats for the first quantile (user can see per-block).
   # Actually, follow Stata: shared header has only N.
   header_left  <- numeric(0)
-  header_right <- c("Number of obs" = n_obs)
-  if (!is.null(rqs_cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = rqs_cluster_n)
-  }
+  header_right <- c(
+    "Number of obs" = n_obs,
+    if (!is.null(rqs_cluster_n)) c("Num. clusters" = rqs_cluster_n)
+  )
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 

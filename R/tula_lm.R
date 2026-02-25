@@ -31,12 +31,10 @@ tula.lm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n_obs,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "R-squared"     = r2,
     "Adj R-squared" = adj_r2
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   opts    <- .parse_tula_opts(ref, label)
   coef_df <- build_coef_df(model, ct, ci, wide, ref = opts$ref, label = opts$label)

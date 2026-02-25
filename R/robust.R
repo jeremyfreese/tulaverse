@@ -13,7 +13,7 @@
 #
 # Returns NULL if no robust adjustment is requested, or a list with:
 #   $vcov_mat  - robust variance-covariance matrix
-#   $se_label  - character: "Robust S.E." or "Clust. S.E."
+#   $se_label  - character: "Robust SE" or "Clust. SE"
 #   $cluster_n - integer or NULL: number of unique clusters (cluster-robust only)
 #
 # Parameters:
@@ -38,7 +38,7 @@
 
   # Pre-computed vcov matrix supplied by the user --------------------------------
   if (is.matrix(vcov_arg)) {
-    return(list(vcov_mat = vcov_arg, se_label = "Robust S.E.", cluster_n = NULL))
+    return(list(vcov_mat = vcov_arg, se_label = "Robust SE", cluster_n = NULL))
   }
 
   # Cluster-robust SEs via sandwich::vcovCL() ------------------------------------
@@ -79,7 +79,7 @@
 
     cluster_n <- length(unique(cluster_vec))
     return(list(vcov_mat  = vcov_mat,
-                se_label  = "Clust. S.E.",
+                se_label  = "Clust. SE",
                 cluster_n = cluster_n))
   }
 
@@ -121,7 +121,7 @@
     }
   )
 
-  list(vcov_mat = vcov_mat, se_label = "Robust S.E.", cluster_n = NULL)
+  list(vcov_mat = vcov_mat, se_label = "Robust SE", cluster_n = NULL)
 }
 
 

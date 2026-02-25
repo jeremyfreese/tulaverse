@@ -71,11 +71,9 @@ tula.clm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "McFadden R-sq" = pseudo_r2
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # Extract design matrix info explicitly.
   # ordinal's model.matrix.clm() does NOT set the "assign" attribute, which

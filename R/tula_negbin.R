@@ -43,11 +43,9 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n_obs,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "McFadden R-sq" = mcfadden
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # --- Family label ---------------------------------------------------------
   family_label <- paste0("Family: Negative Binomial / Link: ", model$family$link)

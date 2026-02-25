@@ -105,7 +105,7 @@ list(
   ancillary_df   = NULL,           # data.frame or NULL; ancillary parameter rows (e.g. negbin alpha)
   level          = 95,             # numeric; CI width as percentage (e.g. 95, 90, 99)
   outcome_levels = NULL,           # character vector or NULL; ordered regression level names for footer
-  se_label       = NULL            # character or NULL; overrides "Std. Err." header (e.g. "Robust S.E.")
+  se_label       = NULL            # character or NULL; overrides "Std. Err." header (e.g. "Robust SE")
 )
 ```
 

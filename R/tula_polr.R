@@ -91,11 +91,9 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "McFadden R-sq" = pseudo_r2
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # Extract design matrix info explicitly.
   # model.matrix() on a polr object includes an intercept column (assign = 0)

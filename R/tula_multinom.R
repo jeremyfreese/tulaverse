@@ -68,11 +68,9 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "McFadden R-sq" = mcfadden
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # assign_vec, term_labels, data_classes, xlevels — extracted once and reused
   # across all outcome blocks (same design matrix for every outcome).

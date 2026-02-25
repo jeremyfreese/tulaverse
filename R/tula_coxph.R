@@ -53,12 +53,10 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   )
   header_right <- c(
     "Number of obs" = n_obs,
+    if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     AIC             = stats::AIC(model),
     Concordance     = concordance
   )
-  if (!is.null(robust_info$cluster_n)) {
-    header_right <- c(header_right, "Num. clusters" = robust_info$cluster_n)
-  }
 
   # --- Family label ----------------------------------------------------------
   family_label <- paste0("Cox regression / Ties: ", model$method)
