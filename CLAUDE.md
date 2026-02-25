@@ -52,8 +52,9 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
 | `R/robust.R` | `.resolve_robust_vcov()`, `.recompute_ct_robust()`, `.robust_ci()` |
-| `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `.extract_var_name()` |
+| `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `new_tula_crosstab()`, `print.tula_crosstab()`, `.extract_var_name()` |
 | `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.truncate_tab_label()` |
+| `R/crosstab_helpers.R` | `.build_crosstab()`, `.crosstab_display_levels()`, `.format_crosstab_table()`, `.render_crosstab_panel()`, `.wrap_row_header()`, `.wrap_col_label()`, `.compute_crosstab_pct()` |
 
 ---
 
@@ -834,6 +835,122 @@ list(tab_df, var_name, var_type, show_cum,
 `haven` is in Suggests (not Imports). Haven-labelled detection uses
 `inherits(vec, "haven_labelled")` which works without loading haven.
 Tagged NA handling requires `haven::is_tagged_na()` and `haven::na_tag()`.
+
+---
+
+## Crosstab path architecture (`tulatab()` two-way mode)
+
+Called when `tulatab()` receives two variables:
+`tulatab(y, x, data = df)` or `tulatab(df$y, df$x)`.
+
+### Signature
+
+```r
+tulatab(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
+        value = TRUE, label = TRUE, width = NULL,
+        pct = "col", freq = TRUE, ...)
+```
+
+When `x` is NULL/missing, dispatches to the one-way path (unchanged).
+When `x` is non-NULL, dispatches to the two-way crosstab path.
+
+### New parameters (two-way only)
+
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `pct` | `"col"` | `"col"`, `"row"`, `"cell"`, or `NULL` (no percentages) |
+| `freq` | `TRUE` | Show frequency counts |
+
+### Haven display override
+
+When both `value=TRUE` and `label=TRUE` (the defaults), the crosstab
+path overrides to `show_value=FALSE, show_label=TRUE` (labels win)
+because column headers are too narrow for `"1 Strong Democrat"`.
+
+### S3 object: tula_crosstab
+
+```r
+list(
+  ct_matrix  = <integer matrix>,    # [n_row_cats x n_col_cats]
+  row_levels = <character vector>,  # display strings for row categories
+  col_levels = <character vector>,  # display strings for col categories
+  row_name   = "trust",             # variable name
+  col_name   = "degree",            # variable name
+  row_label  = "can people be trusted",  # haven var label or NULL
+  col_label  = "r's highest degree",     # haven var label or NULL
+  missing, sort, pct, freq, value, label, width
+)
+```
+
+The matrix stores raw counts; percentages computed at print time.
+
+### Pipeline
+
+```
+tulatab(y, x, data = df)
+  ├─ .crosstab_display_levels(y_vec, ...) → y display levels + key mapping
+  ├─ .crosstab_display_levels(x_vec, ...) → x display levels + key mapping
+  └─ .build_crosstab(y_vec, x_vec, ...)
+       ├─ table(y_fac, x_fac) → integer matrix
+       └─ sort by marginals if sort=TRUE
+  └─ new_tula_crosstab(...)
+       └─ print.tula_crosstab()
+            └─ .format_crosstab_table(ct_obj)
+                 ├─ width calculations (uniform cw_data)
+                 ├─ panel splitting (n_cols_per_panel)
+                 └─ .render_crosstab_panel() per panel
+```
+
+### Rendering layout (three horizontal zones)
+
+```
+             |            col_var_name                  |
+row_var_name | col_1    col_2    col_3    col_4    col_5 |    Total
+             |                                          |
+-------------+------------------------------------------+----------
+   row_cat_1 |    22       30        5       11        7 |       75
+             | 81.48    75.00    55.56    47.83    38.89 |    69.44
+             |                                          |
+   row_cat_2 |     5       10        4       12       11 |       42
+             | 18.52    25.00    44.44    52.17    61.11 |    30.56
+-------------+------------------------------------------+----------
+       Total |    27       40        9       23       18 |      117
+             |100.00   100.00   100.00   100.00   100.00 |   100.00
+```
+
+1. **Row label area** (left): `row_lbl_w` wide, right-aligned
+2. **Data column area** (middle): bounded by `|...|`, uniform `cw_data` width
+3. **Total column area** (right): after second `|`, same `cw_data` width
+
+### Multi-panel overflow
+
+When `ncol(ct_matrix) > n_cols_per_panel`, the table wraps into panels.
+Each panel shows the same row labels, a batch of data columns, and its
+own Total column (always showing FULL row totals). Panels separated by
+a blank line.
+
+### Percentage formulas
+
+| `pct` | Cell | Total column | Total row |
+|-------|------|--------------|-----------|
+| `"col"` | `cell / col_total` | `row_total / grand` | `100.00` per col |
+| `"row"` | `cell / row_total` | `100.00` per row | `col_total / grand` |
+| `"cell"` | `cell / grand` | `row_total / grand` | `col_total / grand` |
+
+### Row header wrapping
+
+`.wrap_row_header(text, width, max_lines = 3)` — word-boundary split,
+at most 3 lines, right-aligned in the row label area.
+
+### Column label wrapping
+
+`.wrap_col_label(text, width)` — hard character split, up to 2 lines,
+right-aligned within `cw_data`. Truncated with `~` if needed.
+
+### Sort
+
+When `sort=TRUE`, rows sorted by descending row marginals, columns by
+descending column marginals. Missing categories always sort to the end.
 
 ---
 
