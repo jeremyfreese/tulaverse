@@ -879,7 +879,7 @@ tula(m_rob, wide = FALSE, vcov = "HC4")
 
 ## Test 67 — Cluster-robust SEs with cluster = "cyl"
 
-**Expected:** SE column header reads `Clust. SE`. Header right block shows
+**Expected:** SE column header reads `Robust SE`. Header right block shows
 `Num. clusters = 3` (mtcars has cyl ∈ {4, 6, 8}). SEs reflect clustering.
 
 ```{r}
@@ -888,7 +888,7 @@ tula(m_rob, wide = FALSE, cluster = "cyl")
 
 ## Test 68 — Cluster-robust SEs with wide output
 
-**Expected:** `Clust. SE` header, `Num. clusters = 3` in header, and CI
+**Expected:** `Robust SE` header, `Num. clusters = 3` in header, and CI
 columns based on cluster-robust SEs.
 
 ```{r}
@@ -907,7 +907,7 @@ tula(m_logit, wide = FALSE, robust = TRUE)
 
 ## Test 70 — Cluster-robust SEs for logistic regression
 
-**Expected:** `Clust. SE` header, `Num. clusters = 3`, CI columns.
+**Expected:** `Robust SE` header, `Num. clusters = 3`, CI columns.
 Robust and exp = TRUE can be combined: SEs differ from model SEs.
 
 ```{r}

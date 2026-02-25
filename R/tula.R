@@ -278,7 +278,7 @@ new_tula_multinom_output <- function(header_left,
 #' Prints Stata-style multinomial logit output: a shared header block,
 #' then one coefficient table per non-base outcome separated by dashed
 #' lines, then a "Base outcome:" footer line. Each outcome label appears
-#' on the same line as the column headers (Coef., Std. Err., etc.),
+#' on the same line as the column headers (Coef, Std. Err., etc.),
 #' in the label-column area, truncated if necessary so the | stays aligned.
 #'
 #' @param x A `tula_multinom_output` object.
@@ -351,7 +351,7 @@ print.tula_multinom_output <- function(x, ...) {
     #
     # Layout per block:
     #   sep
-    #   <outcome label>  |  Coef.  Std. Err.  z  P>|z|  ...
+    #   <outcome label>  |  Coef  Std. Err.  z  P>|z|  ...
     #   sep
     #   ...rows...
     #   sep   <- serves as both block closer and next-block opener

@@ -570,9 +570,11 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
   pval_hdr <- if (stat_label == "z") "P>|z|" else "P>|t|"
 
   # Column header labels: change when exp = TRUE or robust SE is used.
-  # exp = TRUE takes precedence for the SE header ("DMSE" overrides se_label).
-  coef_hdr <- if (exp) (exp_label %||% "exp(b)") else "Coef."
-  se_hdr   <- if (exp) "DMSE" else (se_label %||% "Std. Err.")
+  # se_label (Robust SE) takes precedence over DMSE: if robust SEs were used,
+  # that is more important to signal than the delta-method transformation.
+  # DMSE appears only when exp = TRUE and no robust SE was requested.
+  coef_hdr <- if (exp) (exp_label %||% "exp(b)") else "Coef"
+  se_hdr   <- if (!is.null(se_label)) se_label else if (exp) "DMSE" else "Std. Err."
 
   # CI column header: format level as integer when it has no fractional part
   # (e.g. 95 → "[95% Conf", 99.9 → "[99.9% Conf")
@@ -628,7 +630,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
       lines <- c(lines, paste0(lbl_fmt, " |", trailing))
 
     } else if (isTRUE(row$is_ref)) {
-      # Reference-level row: show 0 (or 1 when exp) for Coef., blanks for rest
+      # Reference-level row: show 0 (or 1 when exp) for Coef, blanks for rest
       ref_val    <- if (exp) "1" else "0"
       blank_se   <- strrep(" ", cw_se)
       blank_stat <- strrep(" ", cw_stat)

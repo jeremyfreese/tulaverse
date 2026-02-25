@@ -13,7 +13,7 @@
 #
 # Returns NULL if no robust adjustment is requested, or a list with:
 #   $vcov_mat  - robust variance-covariance matrix
-#   $se_label  - character: "Robust SE" or "Clust. SE"
+#   $se_label  - character: "Robust SE" (for both HC and cluster-robust)
 #   $cluster_n - integer or NULL: number of unique clusters (cluster-robust only)
 #
 # Parameters:
@@ -79,7 +79,7 @@
 
     cluster_n <- length(unique(cluster_vec))
     return(list(vcov_mat  = vcov_mat,
-                se_label  = "Clust. SE",
+                se_label  = "Robust SE",
                 cluster_n = cluster_n))
   }
 

@@ -5,6 +5,18 @@ It records architectural decisions and how-to patterns for this package.
 
 ---
 
+## Session rules
+
+- **Never commit to git unless the user explicitly instructs you to.** Make
+  changes, render if needed, and stop — let the user decide when and whether
+  to commit.
+- **Rendering `visual_test.qmd` to verify changes work is fine** and
+  encouraged; committing the result is not.
+- **Stop after the requested task.** Don't chain to unrequested improvements
+  — finish what was asked, summarize what changed, and wait.
+
+---
+
 ## What tula does
 
 `tula()` is an S3 generic that produces Stata-style console output for two
@@ -131,7 +143,7 @@ When `exp = TRUE` is passed to `tula()`, the formatting layer transforms
 the display without mutating `coef_df`:
 
 - **Estimate column**: shows `exp(β)` instead of `β`; header becomes `"exp(b)"`.
-- **SE column**: shows the delta-method SE = `exp(β) × SE(β)`; header becomes `"DMSE"`.
+- **SE column**: shows the delta-method SE = `exp(β) × SE(β)`; header becomes `"DMSE"` unless robust SEs are in use, in which case `"Robust SE"` takes precedence.
 - **Test statistic and p-value**: unchanged (invariant under exponentiation).
 - **Reference rows**: show `1` instead of `0` (since `exp(0) = 1`).
 - **CIs**: when `exp = TRUE` and `wide = TRUE`, CI bounds are exponentiated
@@ -248,7 +260,7 @@ to `new_tula_output()`.
 and `exp = FALSE`, it replaces `"Std. Err."` in the column header:
 
 ```
-se_hdr <- if (exp) "DMSE" else (se_label %||% "Std. Err.")
+se_hdr <- if (!is.null(se_label)) se_label else if (exp) "DMSE" else "Std. Err."
 ```
 
 ### Ordered models (polr, clm) — special handling
