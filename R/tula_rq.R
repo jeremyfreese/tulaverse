@@ -3,11 +3,6 @@
 tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                     width = NULL, exp = FALSE, level = 95, ...) {
   level <- .resolve_level(level)
-  # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
   wide <- .resolve_wide(wide, width)
 
   tau   <- model$tau
@@ -133,10 +128,6 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                      width = NULL, exp = FALSE, level = 95,
                      parallel = FALSE, ...) {
   level <- .resolve_level(level)
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
   wide <- .resolve_wide(wide, width)
 
   taus  <- model$tau
@@ -219,7 +210,7 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       model_frame  = mf
     )
 
-    list(outcome = .rq_family_label(tau_k), coef_df = coef_df, tau = tau_k)
+    list(outcome = .rq_short_label(tau_k), coef_df = coef_df, tau = tau_k)
   })
 
   # Shared header: aggregate across all quantiles is not standard.
@@ -266,6 +257,20 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # Ordinal suffix
   suffix <- .ordinal_suffix(as.numeric(pct_str))
   paste0(pct_str, suffix, " Quantile regression")
+}
+
+# Internal: short label for stacked/parallel block headers.
+#
+# tau=0.5  → "Median"
+# tau=0.9  → "90th Q"
+# tau=0.25 → "25th Q"
+# ---------------------------------------------------------------------------
+.rq_short_label <- function(tau) {
+  if (tau == 0.5) return("Median")
+  pct <- tau * 100
+  pct_str <- if (pct == as.integer(pct)) as.character(as.integer(pct)) else as.character(pct)
+  suffix <- .ordinal_suffix(as.numeric(pct_str))
+  paste0(pct_str, suffix, " Q")
 }
 
 # Internal: ordinal suffix for a number (1st, 2nd, 3rd, 4th, ...)

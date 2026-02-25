@@ -3,11 +3,6 @@
 tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                         width = NULL, exp = FALSE, level = 95, ...) {
   level <- .resolve_level(level)
-  # --- exp / wide interaction -----------------------------------------------
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
   wide <- .resolve_wide(wide, width)
 
   s     <- summary(model)

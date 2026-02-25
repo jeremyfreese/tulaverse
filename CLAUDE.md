@@ -11,7 +11,8 @@ It records architectural decisions and how-to patterns for this package.
 distinct input types:
 
 - **Regression models** (`lm`, `glm`, `negbin`, `multinom`, `polr`, `clm`,
-  and future model types): coefficient table with header block (fit statistics).
+  `rq`, `rqs`, `coxph`, and future model types): coefficient table with header
+  block (fit statistics).
 - **Data frames / vectors** (the "summarize path"): Stata `-summarize`-style
   descriptive statistics table.
 
@@ -21,12 +22,17 @@ distinct input types:
 
 | File | Purpose |
 |------|---------|
-| `R/tula.R` | Generic, `tula.default`, `tula.data.frame`, `new_tula_output()`, `print.tula_output()` |
+| `R/tula.R` | Generic, `tula.default`, `tula.data.frame`, `new_tula_output()`, `print.tula_output()`, `new_tula_multinom_output()`, `print.tula_multinom_output()` |
 | `R/tula_lm.R` | `tula.lm()` method |
 | `R/tula_glm.R` | `tula.glm()` method |
 | `R/tula_multinom.R` | `tula.multinom()` method |
 | `R/tula_negbin.R` | `tula.negbin()` method |
-| `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `format_ancillary_rows()`, `.truncate_label()`, row constructors |
+| `R/tula_polr.R` | `tula.polr()` method (ordered regression via `MASS::polr`) |
+| `R/tula_coxph.R` | `tula.coxph()` method (Cox proportional hazards via `survival::coxph`) |
+| `R/tula_clm.R` | `tula.clm()` method (ordered regression via `ordinal::clm`) |
+| `R/tula_rq.R` | `tula.rq()`, `tula.rqs()`, `new_tula_rqs_output()`, `print.tula_rqs_output()` |
+| `R/tulaplot.R` | `tulaplot()`, `theme_tula()`, `scale_color_tula()`, `scale_fill_tula()`, `.tula_palette` |
+| `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `format_ancillary_rows()`, `.truncate_label()`, `.build_cutpoint_rows()`, row constructors |
 | `R/header.R` | `format_header()`, `compute_total_width()` |
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
@@ -45,7 +51,7 @@ tula.XYZ(model, ...)
   ├─ determine: stat_label ("t", "z", etc.), family_label (or NULL)
   │
   ├─► build_coef_df(model, ct, ci, wide, ref, label, ...)  [coef_table.R]
-  │     └─ returns canonical coef_df (10-column data frame)
+  │     └─ returns canonical coef_df (11-column data frame)
   │
   └─► new_tula_output(...)  [tula.R]
         └─ returns tula_output S3 object → auto-printed by print.tula_output()
@@ -58,13 +64,15 @@ class. The rendering pipeline (`print.tula_output`, `format_header`,
 
 ### The coef_df structure
 
-Ten columns produced by `build_coef_df()`:
+Eleven columns produced by `build_coef_df()` (or appended via
+`.build_cutpoint_rows()` for ordered models):
 
 ```
 label            chr   Display label; factor levels indented with "  "
 is_factor_header lgl   TRUE for factor group header rows (no numeric values)
 is_intercept     lgl   TRUE for intercept-type rows (placed last)
 is_ref           lgl   TRUE for reference-level rows (shown when ref=TRUE)
+is_cutpoint      lgl   TRUE for cutpoint/threshold rows (ordered regression)
 estimate         dbl   Coefficient
 std_err          dbl   Standard error
 statistic        dbl   t or z statistic
@@ -73,20 +81,29 @@ ci_lower         dbl   Lower CI bound (NA if wide=FALSE)
 ci_upper         dbl   Upper CI bound (NA if wide=FALSE)
 ```
 
+Cutpoint rows (from ordered regression) have `is_cutpoint = TRUE` and show
+estimate + SE + blank statistic + blank p-value. They are rendered after the
+main coefficient block, preceded by a separator line (Stata convention).
+
 ### The tula_output object
 
 ```r
 list(
-  model_type   = "lm",          # character; used for nothing except record-keeping
-  header_left  = c(...),         # named numeric vector — left header block
-  header_right = c(...),         # named numeric vector — right header block
-  coef_df      = <data.frame>,   # from build_coef_df()
-  stat_label   = "t",            # "t", "z", or whatever label suits the model
-  wide         = FALSE,          # logical; whether CI columns are shown
-  family_label = NULL,           # optional string, e.g. "Family: binomial / Link: logit"
-  width        = NULL,           # integer, Inf, or NULL (→ getOption("width"))
-  value_fmts   = c(AIC = "f3"), # named character: header value format overrides (see format_header)
-  exp          = FALSE           # logical; whether exponentiated coefficients are displayed
+  model_type     = "lm",          # character; used for nothing except record-keeping
+  header_left    = c(...),         # named numeric vector — left header block
+  header_right   = c(...),         # named numeric vector — right header block
+  coef_df        = <data.frame>,   # from build_coef_df()
+  stat_label     = "t",            # "t", "z", or whatever label suits the model
+  wide           = FALSE,          # logical; whether CI columns are shown
+  family_label   = NULL,           # optional string, e.g. "Family: binomial / Link: logit"
+  width          = NULL,           # integer, Inf, or NULL (→ getOption("width"))
+  value_fmts     = c(AIC = "f3"), # named character: header value format overrides
+  exp            = FALSE,          # logical; whether exponentiated coefficients are displayed
+  dep_var        = NULL,           # character or NULL; dependent variable name shown in column header
+  exp_label      = NULL,           # character or NULL; replaces "exp(b)" header (e.g. "IRR")
+  ancillary_df   = NULL,           # data.frame or NULL; ancillary parameter rows (e.g. negbin alpha)
+  level          = 95,             # numeric; CI width as percentage (e.g. 95, 90, 99)
+  outcome_levels = NULL            # character vector or NULL; ordered regression level names for footer
 )
 ```
 
@@ -115,36 +132,23 @@ the display without mutating `coef_df`:
 - **SE column**: shows the delta-method SE = `exp(β) × SE(β)`; header becomes `"DMSE"`.
 - **Test statistic and p-value**: unchanged (invariant under exponentiation).
 - **Reference rows**: show `1` instead of `0` (since `exp(0) = 1`).
-- **CIs suppressed**: when `exp = TRUE`, `wide` is forced to `FALSE` with an
-  informative `message()`. Exponentiated CIs (which would be asymmetric) are
-  documented as a future consideration.
+- **CIs**: when `exp = TRUE` and `wide = TRUE`, CI bounds are exponentiated
+  (`exp(ci_lower)`, `exp(ci_upper)`). The resulting CIs are asymmetric, which
+  is standard for hazard ratios, odds ratios, IRRs, etc. Cutpoint rows
+  (ordered regression) are never exponentiated.
 
 The transformation happens in `format_coef_table()` (in `coef_table.R`),
 not in `build_coef_df()`. This keeps the data pipeline clean — `coef_df`
 always stores raw (unexponentiated) values.
 
-### Future extensibility: `exp_label`
+### `exp_label`
 
-The column header is currently always `"exp(b)"`. The architecture is designed
-so that a model-specific label (e.g., `"Odds Ratio"` for logistic, `"IRR"`
-for Poisson) could be added later via an `exp_label` field on the output
-object, without changing `format_coef_table()` substantially.
+Optional character scalar on `tula_output`. When `exp = TRUE` and `exp_label`
+is non-NULL, it replaces the default `"exp(b)"` column header. Current usage:
 
-### `exp`/`wide` interaction
-
-Each `tula.*()` method checks `exp` before resolving `wide`:
-
-```r
-if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-  message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-  wide <- FALSE
-}
-wide <- .resolve_wide(wide, width)
-```
-
-The message fires only when the user would have gotten CIs (explicit
-`wide = TRUE`, or `wide = NULL` which auto-resolves). When `wide = FALSE`
-is already explicit, no message is printed.
+- Negative binomial: `"IRR"` (Incidence Rate Ratio)
+- Cox PH: `"Haz. Ratio"` (Hazard Ratio)
+- Future: `"Odds Ratio"` for logistic, `"HR"` for other survival models
 
 ---
 
@@ -184,20 +188,6 @@ or `print.tula_output()` are needed.
 
 ---
 
-## `exp_label` — model-specific exponentiated column header
-
-Optional character scalar on `tula_output`. When `exp = TRUE` and `exp_label`
-is non-NULL, it replaces the default `"exp(b)"` column header. Examples:
-
-- Negative binomial: `"IRR"` (Incidence Rate Ratio)
-- Future: `"Odds Ratio"` for logistic, `"HR"` for Cox
-
-All existing methods pass `exp_label = NULL` (default), preserving the
-`"exp(b)"` header. Set conditionally in the method:
-`exp_label = if (isTRUE(exp)) "IRR" else NULL`.
-
----
-
 ## Negative binomial (`MASS::glm.nb`)
 
 ### Key structural features
@@ -224,14 +214,16 @@ All existing methods pass `exp_label = NULL` (default), preserving the
 ### Step 1 — Create `R/tula_MODELTYPE.R`
 
 The method needs to:
-1. Handle the `exp`/`wide` interaction (suppress CIs when `exp = TRUE`).
+1. Accept `level = 95` and resolve it via `.resolve_level(level)`.
 2. Resolve `wide` via `.resolve_wide(wide, width)`.
-3. Run `summary(model)` (or equivalent).
-4. Extract `ct`: a matrix with columns (Estimate, Std. Error, statistic, p-value).
+4. Run `summary(model)` (or equivalent).
+5. Extract `ct`: a matrix with columns (Estimate, Std. Error, statistic, p-value).
    Column names don't matter — only column positions [1:4] are used.
-5. Compute `ci`: a two-column matrix of CI bounds (rownames matching `ct`), or NULL.
-6. Assemble `header_left` and `header_right` as named numeric vectors.
-7. Call `build_coef_df()` and `new_tula_output()`, passing `exp = exp`.
+6. Compute `ci`: a two-column matrix of CI bounds (rownames matching `ct`), or NULL.
+   Pass `level / 100` to `confint()` if it accepts a `level` argument.
+7. Assemble `header_left` and `header_right` as named numeric vectors.
+8. Extract `dep_var` via `deparse(formula(model)[[2L]])`.
+9. Call `build_coef_df()` and `new_tula_output()`, passing `exp`, `dep_var`, `level`.
 
 Minimal template:
 
@@ -239,12 +231,8 @@ Minimal template:
 #' @rdname tula
 #' @export
 tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                           width = NULL, exp = FALSE, ...) {
-  # --- exp / wide interaction -----------------------------------------------
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
+                           width = NULL, exp = FALSE, level = 95, ...) {
+  level <- .resolve_level(level)
   wide <- .resolve_wide(wide, width)
 
   s     <- summary(model)
@@ -253,20 +241,21 @@ tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ct <- s$coefficients[ , 1:4, drop = FALSE]
 
   # --- ci: confidence intervals or NULL ------------------------------------
-  ci <- if (wide) confint(model) else NULL
+  ci <- if (wide) confint(model, level = level / 100) else NULL
 
   # --- Header metrics -------------------------------------------------------
   header_left  <- c(AIC = AIC(model), BIC = BIC(model))
   header_right <- c("Number of obs" = nobs(model))
 
   # --- Stat label -----------------------------------------------------------
-  # Inspect the column name of ct to decide "t" vs "z" vs something else.
   stat_label <- if (grepl("^z", colnames(ct)[3L], ignore.case = TRUE)) "z" else "t"
 
   # --- Coef data frame ------------------------------------------------------
   opts    <- .parse_tula_opts(ref, label)
   coef_df <- build_coef_df(model, ct, ci, wide,
                             ref = opts$ref, label = opts$label)
+
+  dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
   # --- Output ---------------------------------------------------------------
   new_tula_output(
@@ -278,7 +267,9 @@ tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     wide         = wide,
     family_label = NULL,   # or a descriptive string
     width        = width,
-    exp          = exp
+    exp          = exp,
+    dep_var      = dep_var,
+    level        = level
   )
 }
 ```
@@ -315,59 +306,10 @@ pre-parsed values as explicit arguments:
 matching. Models with no intercept (e.g. Cox) simply produce no intercept
 rows. Models with a non-standard intercept name work correctly.
 
-### Example: Cox proportional hazards
+### Example: Cox proportional hazards (now implemented)
 
-```r
-tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
-                       width = NULL, exp = FALSE, ...) {
-  # --- exp / wide interaction -----------------------------------------------
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
-  wide <- .resolve_wide(wide, width)
-
-  s  <- summary(model)
-
-  # coxph summary matrix columns: coef, exp(coef), se(coef), z, Pr(>|z|)
-  # We need columns: Estimate, SE, statistic, p-value
-  ct_raw <- s$coefficients
-  ct <- ct_raw[ , c("coef", "se(coef)", "z", "Pr(>|z|)"), drop = FALSE]
-  colnames(ct) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
-
-  ci <- if (wide) s$conf.int[ , c("lower .95", "upper .95"), drop = FALSE] else NULL
-
-  # Cox has no intercept — assign_vec will have no zeros, so no intercept
-  # row is emitted. Supply assign_vec explicitly so model.matrix() isn't
-  # called with an implicit intercept column added.
-  mm         <- model.matrix(model)
-  assign_vec <- attr(mm, "assign")   # all entries will be >= 1
-
-  opts    <- .parse_tula_opts(ref, label)
-  coef_df <- build_coef_df(model, ct, ci, wide,
-                            ref = opts$ref, label = opts$label,
-                            assign_vec = assign_vec)
-
-  header_left  <- c(AIC = AIC(model), BIC = BIC(model))
-  header_right <- c(
-    "Number of obs"   = s$n,
-    "Number of events" = s$nevent,
-    "Concordance"     = s$concordance[["C"]]
-  )
-
-  new_tula_output(
-    model_type   = "coxph",
-    header_left  = header_left,
-    header_right = header_right,
-    coef_df      = coef_df,
-    stat_label   = "z",
-    wide         = wide,
-    family_label = "Cox proportional hazards",
-    width        = width,
-    exp          = exp
-  )
-}
-```
+See `R/tula_coxph.R` for the full implementation and the
+"Cox proportional hazards" section above for details.
 
 ---
 
@@ -457,10 +399,12 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 
 | Option | Default | Path | Effect |
 |--------|---------|------|--------|
-| `wide` | NULL | regression | Show 95% CI columns (NULL = auto based on width ≥ 80) |
+| `wide` | NULL | regression | Show CI columns (NULL = auto based on width ≥ 80) |
 | `ref` | FALSE | regression | Show reference level rows |
 | `label` | TRUE | regression | Use haven value labels |
 | `exp` | FALSE | regression | Exponentiate coefficients; show exp(b) and DMSE; suppress CIs |
+| `level` | 95 | regression | CI width as percentage (e.g. 90, 95, 99); also accepts 0–1 scale |
+| `parallel` | FALSE | multinom/rqs | Side-by-side outcome columns instead of stacked blocks |
 | `width` | NULL (→ `getOption("width")`) | both | Total output width |
 | `sep` | 5L | summarize | Variables between separator lines |
 | `mad` | FALSE | summarize | Show MAD instead of SD |
@@ -468,6 +412,214 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 | `digits` | 7L | summarize | Significant digits (avoids sci notation to ~10M) |
 
 The summarize path also caps decimal places at 3 for `|x| > 0.1` via `.fmt_sum()`.
+
+### `level` parameter
+
+The `level` parameter controls CI width. Accepted on the `tula()` generic and
+all regression methods. Resolved via `.resolve_level()`:
+- Values < 1 are multiplied by 100 (so `0.95` → `95`).
+- Must be between 50 and 99.9 after normalisation.
+- The CI column header adjusts automatically (e.g. `"[90% CI]"` instead of
+  `"[95% CI]"`). This is handled in `format_coef_table()`.
+- Passed to `confint()` as `level / 100` where applicable.
+
+### `dep_var` — dependent variable name
+
+All regression methods extract the dependent variable name via
+`deparse(formula(model)[[2L]])` and pass it to `new_tula_output()`. The
+`print.tula_output()` method displays it in the label-column area of the
+column-header line (same pattern as multinomial outcome labels).
+
+---
+
+## Ordered regression (`MASS::polr` and `ordinal::clm`)
+
+### Key structural features
+
+- **Two methods, same architecture**: `tula.polr()` and `tula.clm()` share
+  nearly identical structure. Both separate predictor coefficients from
+  cutpoints (thresholds between ordered categories).
+- **Cutpoints**: Ordered models estimate threshold parameters (e.g. `"1|2"`,
+  `"2|3"`) in addition to predictor coefficients. These are rendered as
+  cutpoint rows (via `.build_cutpoint_rows()`) appended to `coef_df`.
+  Cutpoint rows have `is_cutpoint = TRUE`, show estimate + SE, and leave
+  statistic + p-value blank (Stata convention).
+- **polr quirk**: `summary(polr)$coefficients` has only 3 columns (Value,
+  Std. Error, t value) — no p-value. The method computes p-values manually:
+  `2 * pnorm(-abs(t))`. The "t value" is really asymptotically z-distributed,
+  so `stat_label = "z"`.
+- **clm**: `summary(clm)$coefficients` has the standard 4 columns (Estimate,
+  Std. Error, z value, Pr(>|z|)) for all parameters (thresholds + predictors).
+- **`model.matrix()` workarounds**: `polr`'s model matrix includes an
+  intercept column (assign = 0) that polr strips internally. Fix: filter
+  `assign_vec` to remove zeros so positions match predictor names.
+  `clm`'s `model.matrix.clm()` does NOT set the `"assign"` attribute;
+  bypass by calling `model.matrix(terms(model), data = mf)` instead.
+- **McFadden R²**: computed from marginal proportions (`ll_null = sum(n_k * log(n_k/N))`)
+  rather than fitting a separate null model.
+- **CIs**: Wald-type CIs via `vcov()`, manually computed with z-critical value.
+  Covers both predictors and cutpoints.
+- **Footer**: `outcome_levels` is passed to `new_tula_output()`. The
+  `print.tula_output()` method renders a "Lowest level: X, Highest: Y" footer
+  when `outcome_levels` has ≥ 2 elements.
+- **family_label**: `"Ordered regression / Link: <method>"` (polr uses
+  `model$method`, clm uses `model$link`).
+
+---
+
+## Cox proportional hazards (`survival::coxph`)
+
+### Key structural features
+
+- **S3 class**: `"coxph"`. `survival` is in Suggests, not Imports.
+- **Default `exp = TRUE`**: unlike all other methods, Cox defaults to showing
+  hazard ratios. Users pass `exp = FALSE` for raw log-hazard coefficients.
+- **`exp_label`**: `"Haz. Ratio"` when `exp = TRUE`.
+- **No intercept**: Cox models have no intercept term. `model.matrix(coxph)`
+  returns a matrix where all `assign` entries are >= 1, so `build_coef_df()`
+  produces no intercept row automatically.
+- **summary**: `summary(coxph)$coefficients` has 5 columns: `coef`,
+  `exp(coef)`, `se(coef)`, `z`, `Pr(>|z|)`. Extract columns 1, 3, 4, 5
+  for the canonical 4-column `ct` matrix.
+- **CIs**: Wald-type via `confint.default()` on the log-hazard scale.
+  `format_coef_table()` exponentiates these when `exp = TRUE`.
+- **Header left**: No. of subjects, No. of failures, Time at risk,
+  Log likelihood.
+- **Header right**: Number of obs, AIC, Concordance.
+- **Time at risk**: `sum(model$y[, 1L])` — total survival time across all
+  subjects. Falls back to `model.frame()` if `model$y` is NULL.
+- **Concordance**: `summary(model)$concordance[["C"]]` (Harrell's C).
+- **Log likelihood**: `model$loglik[2L]` (fitted model; `[1L]` = null).
+- **family_label**: `"Cox regression / Ties: <method>"` where method is
+  `model$method` (efron, breslow, or exact).
+- **stat_label**: `"z"`.
+- **value_fmts**: `c("Log likelihood" = "f3", AIC = "f3")`.
+
+---
+
+## Quantile regression (`quantreg::rq` and `rqs`)
+
+### Key structural features
+
+- **S3 classes**: `quantreg::rq()` returns class `"rq"` for a single quantile
+  and class `"rqs"` for multiple quantiles (when `tau` is a vector).
+- **`quantreg` is in Suggests**, not Imports. Users must install it themselves.
+- **summary**: `summary(rq_model, se = "nid")` gives the standard 4-column
+  coefficient table (Value, Std. Error, t value, Pr(>|t|)) with `stat_label = "t"`.
+- **CIs**: Wald-type CIs computed manually from SE and z-critical value
+  (not via `confint.rq()`, which uses rank-based inversion).
+- **`model.matrix()` workaround**: `model.matrix(rq_object)` fails because
+  it can't find the data. Bypassed with
+  `model.matrix(terms(model), data = model.frame(model))`.
+
+### Single quantile: `tula.rq()`
+
+Standard `tula_output` object. Header shows:
+- Left: `Raw sum of dev`, `Min sum of dev`, `K-B Pseudo R2`
+  (Koenker-Bassett Pseudo R² = `1 - min_sum_dev / raw_sum_dev`)
+- Right: `Number of obs`
+- `family_label`: `.rq_family_label(tau)` — e.g. `"Median regression"` or
+  `"90th Quantile regression"`.
+
+### Multiple quantiles: `tula.rqs()`
+
+Uses a **distinct output object**: `tula_rqs_output` (analogous to
+`tula_multinom_output`). Supports two display modes:
+
+- **Stacked** (default): one coefficient block per quantile, separated by
+  dashed lines. Short labels via `.rq_short_label()` appear in the
+  label-column area of each block's header row.
+- **Parallel** (`parallel = TRUE`): all quantiles as side-by-side columns
+  with significance stars. Uses the same `.format_parallel_multinom_table()`
+  renderer as multinomial output.
+
+### `tula_rqs_output` object
+
+```r
+list(
+  header_left  = numeric(0),     # empty (no shared fit stats)
+  header_right = c("Number of obs" = N),
+  blocks       = list(           # one per quantile
+    list(outcome = "25th Q", coef_df = <data.frame>, tau = 0.25),
+    list(outcome = "Median", coef_df = <data.frame>, tau = 0.5),
+    ...
+  ),
+  stat_label   = "t",
+  wide         = FALSE,
+  width        = NULL,
+  value_fmts   = character(0L),
+  exp          = FALSE,
+  parallel     = FALSE,
+  dep_var      = "y",
+  level        = 95,
+  family_label = "Quantile regression (3 quantiles)"
+)
+```
+
+### Two-tier labeling system
+
+- **`.rq_family_label(tau)`**: Full label for single-quantile `family_label`
+  line. E.g. `"Median regression"`, `"90th Quantile regression"`.
+- **`.rq_short_label(tau)`**: Compact label for stacked/parallel block headers.
+  E.g. `"Median"`, `"90th Q"`, `"25th Q"`. Avoids truncation of long labels
+  in narrow output.
+
+### Per-quantile summary in `tula.rqs()`
+
+Each quantile block is summarized by constructing a lightweight single-tau
+`rq` object from the multi-tau model's coefficient and residual columns,
+then calling `summary(..., se = "nid")` on it. This avoids re-fitting
+but gives proper standard errors.
+
+---
+
+## Plotting (`tulaplot.R`)
+
+### Overview
+
+Four exported functions for ggplot2 integration with Stata 18 `stcolor`
+scheme defaults. All use explicit `ggplot2::` prefixes (no `importFrom`).
+
+### `.tula_palette`
+
+Internal 15-color vector from Stata 18's default `stcolor` scheme:
+stblue, stred, stgreen, styellow, stc5–stc15.
+
+### `tulaplot(data, mapping, ..., base_size = 14)`
+
+Thin wrapper: `ggplot2::ggplot(data, mapping, ...) + theme_tula(base_size)`.
+Returns a standard composable ggplot object.
+
+### `theme_tula(base_size = 14, base_family = "sans")`
+
+Complete ggplot2 theme (usable standalone). Key choices:
+- White backgrounds (panel + plot)
+- Light gray dashed major grid lines; no minor grid lines
+- Black axis lines (no panel border)
+- `base_size = 14` (vs ggplot2 default 11) for readability
+- Default geom fill = stc1 blue (#1A85FF), colour = black
+- Bar geoms get thin black outlines via `update_geom_defaults()`
+- `complete = TRUE` — fully self-contained theme
+
+### `scale_color_tula(...)` / `scale_fill_tula(...)`
+
+Discrete scales using the 15-color palette. Recycles with warning if > 15 levels.
+
+### Dependencies
+
+`ggplot2 (>= 3.5.0)` is in `Imports`. The `>= 3.5.0` requirement is for
+`ggplot2::element_geom()` used in `theme_tula()`.
+
+---
+
+## Parallel output layout (multinomial and quantile regression)
+
+Both `tula_multinom_output` and `tula_rqs_output` support `parallel = TRUE`
+for side-by-side outcome/quantile columns. The shared renderer is
+`.format_parallel_multinom_table()` in `R/tula_multinom.R` (despite the name,
+it works for any block-based output). Each column shows the coefficient with
+significance stars (`*` p<0.05, `**` p<0.01, `***` p<0.001`). SE, statistic,
+and p-value are not shown in parallel mode.
 
 ---
 

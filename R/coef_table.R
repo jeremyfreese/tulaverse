@@ -663,6 +663,14 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
       est_display <- if (exp && !is_cp) exp(row$estimate) else row$estimate
       se_display  <- if (exp && !is_cp) exp(row$estimate) * row$std_err else row$std_err
 
+      # When exp = TRUE and wide, exponentiate CI bounds (cutpoints excluded).
+      ci_lo <- row$ci_lower
+      ci_hi <- row$ci_upper
+      if (exp && !is_cp && wide) {
+        ci_lo <- exp(ci_lo)
+        ci_hi <- exp(ci_hi)
+      }
+
       if (wide) {
         line <- sprintf(
           "%s |%s %s %s %s %s %s",
@@ -671,8 +679,8 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
           fmt_num(se_display,    width = cw_se),
           fmt_num(row$statistic, width = cw_stat),
           fmt_pval(row$p_value,  width = cw_pval),
-          fmt_num(row$ci_lower,  width = cw_ci),
-          fmt_num(row$ci_upper,  width = cw_ci)
+          fmt_num(ci_lo,         width = cw_ci),
+          fmt_num(ci_hi,         width = cw_ci)
         )
       } else {
         line <- sprintf(

@@ -399,7 +399,8 @@ if (requireNamespace("quantreg", quietly = TRUE)) {
 
 ## Test 30 — rq: exp = TRUE
 
-**Expected:** Column headers change to `exp(b)` and `DMSE`. CIs suppressed.
+**Expected:** Column headers change to `exp(b)` and `DMSE`. CIs are
+exponentiated when wide output is active.
 
 ```{r}
 if (requireNamespace("quantreg", quietly = TRUE)) {
@@ -475,9 +476,68 @@ if (requireNamespace("quantreg", quietly = TRUE)) {
 
 ---
 
+# Cox proportional hazards (survival::coxph)
+
+```{r}
+library(survival)
+```
+
+## Test 37 — Cox: default output (hazard ratios)
+
+**Expected:** `Cox regression / Ties: efron` family label. Header left: No. of
+subjects, No. of failures, Time at risk, Log likelihood. Header right: Number
+of obs, AIC, Concordance. Default `exp = TRUE` shows `Haz. Ratio` column header
+and delta-method SE (`DMSE`). CIs are exponentiated (asymmetric). `z` / `P>|z|`
+stat columns. No intercept row.
+
+```{r}
+m37 <- coxph(Surv(time, status) ~ age + sex + ph.ecog, data = lung)
+tula(m37)
+```
+
+## Test 38 — Cox: factor predictor
+
+**Expected:** `ph.ecog_f` appears as a factor group header with indented levels.
+Hazard ratios and exponentiated CIs. No intercept row.
+
+```{r}
+lung2 <- lung
+lung2$ph.ecog_f <- factor(lung2$ph.ecog)
+m38 <- coxph(Surv(time, status) ~ age + sex + ph.ecog_f, data = lung2)
+tula(m38)
+```
+
+## Test 39 — Cox: exp = FALSE (log-hazard coefficients)
+
+**Expected:** Column header reads `Coef.` and `Std. Err.` (raw scale). CIs on
+the log-hazard scale (symmetric around point estimate).
+
+```{r}
+tula(m37, exp = FALSE)
+```
+
+## Test 40 — Cox: ref = TRUE
+
+**Expected:** Reference level row shows `1` (since exp = TRUE by default,
+`exp(0) = 1`). Factor header row blank.
+
+```{r}
+tula(m38, ref = TRUE)
+```
+
+## Test 41 — Cox: narrow output (wide = FALSE)
+
+**Expected:** No CI columns. Hazard ratios and DMSE still shown.
+
+```{r}
+tula(m37, wide = FALSE)
+```
+
+---
+
 # ref = TRUE — Reference level rows
 
-## Test 37 — Single factor, lm
+## Test 42 — Single factor, lm
 
 **Expected:** `ref = FALSE` (default) shows only non-reference levels (`6`, `8`).
 `ref = TRUE` adds a `4 (base)` row at the bottom of the `cyl` group with
@@ -491,7 +551,7 @@ cat("\nref = TRUE:\n")
 tula(m37, ref = TRUE)
 ```
 
-## Test 38 — Two factors, lm
+## Test 43 — Two factors, lm
 
 **Expected:** Each factor group gets its own `(base)` row. `cyl` base = `4`;
 `am` base = `0`.
@@ -501,7 +561,7 @@ m38 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
 tula(m38, ref = TRUE)
 ```
 
-## Test 39 — glm with factor predictor
+## Test 44 — glm with factor predictor
 
 **Expected:** Reference row appears in the glm coefficient table just as in lm.
 Stat column is `z`; p-value column is `P>|z|`.
@@ -511,7 +571,7 @@ m39 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
 tula(m39, ref = TRUE)
 ```
 
-## Test 40 — Three-level factor (iris)
+## Test 45 — Three-level factor (iris)
 
 **Expected:** `setosa` appears as the base row after `versicolor` and
 `virginica`.
@@ -524,7 +584,7 @@ cat("\nref = TRUE:\n")
 tula(m40, ref = TRUE)
 ```
 
-## Test 41 — Long factor labels (truncation check)
+## Test 46 — Long factor labels (truncation check)
 
 **Expected:** Factor level labels long enough to require truncation (`~`).
 The base-category row should truncate cleanly, and all rows must be the same
@@ -543,7 +603,7 @@ m41 <- lm(mpg ~ wt + engine_type, data = df41)
 tula(m41, ref = TRUE)
 ```
 
-## Test 42 — Binary factor collapse
+## Test 47 — Binary factor collapse
 
 **Expected:** When a binary factor's non-reference level label matches the
 variable name (case-insensitively), the group-header row is suppressed and the
@@ -568,7 +628,7 @@ tula(m42, ref = TRUE)
 
 # label — Haven-style value labels
 
-## Test 43 — Factor levels already meaningful strings
+## Test 48 — Factor levels already meaningful strings
 
 **Expected:** `label = TRUE` and `label = FALSE` produce identical output when
 levels are already strings (e.g. `"Four"`, `"Six"`, `"Eight"`).
@@ -585,7 +645,7 @@ cat("\nlabel = FALSE:\n")
 tula(m43, ref = TRUE, label = FALSE)
 ```
 
-## Test 44 — Haven-style value labels
+## Test 49 — Haven-style value labels
 
 **Expected:** When the data column carries a `labels` attribute (as produced
 by haven), `label = TRUE` substitutes numeric codes with text labels.
@@ -608,11 +668,11 @@ tula(m44, ref = TRUE, label = FALSE)
 
 # exp = TRUE — Exponentiated coefficients
 
-## Test 45 — lm, numeric predictors
+## Test 50 — lm, numeric predictors
 
 **Expected:** Column headers change to `exp(b)` and `DMSE`. Estimate column
 shows `exp(coef)`, SE column shows `exp(coef) * SE`. `t` and `P>|t|`
-unchanged. CIs suppressed.
+unchanged. CIs exponentiated when wide mode is active.
 
 ```{r}
 m45 <- lm(mpg ~ cyl + wt, data = mtcars)
@@ -622,7 +682,7 @@ cat("\nexp = TRUE:\n")
 tula(m45, exp = TRUE)
 ```
 
-## Test 46 — lm with factor and ref = TRUE
+## Test 51 — lm with factor and ref = TRUE
 
 **Expected:** Factor header row blank. Non-reference levels show exponentiated
 coefficients and DMSE. Reference-level row shows `1` instead of `0`.
@@ -632,7 +692,7 @@ m46 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
 tula(m46, exp = TRUE, ref = TRUE)
 ```
 
-## Test 47 — glm logistic (odds ratios)
+## Test 52 — glm logistic (odds ratios)
 
 **Expected:** `exp(b)` produces odds ratios for logistic model. Compare with
 R's `exp(coef(m))`.
@@ -645,7 +705,7 @@ cat("\nVerification — exp(coef):\n")
 print(exp(coef(m47)))
 ```
 
-## Test 48 — glm with factor and ref = TRUE
+## Test 53 — glm with factor and ref = TRUE
 
 **Expected:** Reference rows show `1`. Factor headers blank. Stat and p-value
 unchanged.
@@ -659,7 +719,7 @@ tula(m48, exp = TRUE, ref = TRUE)
 
 # level — Confidence interval width
 
-## Test 49 — 90% vs 95% vs 99% CIs
+## Test 54 — 90% vs 95% vs 99% CIs
 
 **Expected:** CI bounds narrow at 90% and widen at 99%. Column header updates:
 `[90% Conf`, `[95% Conf`, `[99% Conf`. Point estimates, SEs, statistics, and
@@ -675,7 +735,7 @@ cat("\nlevel = 99:\n")
 tula(m49, level = 99)
 ```
 
-## Test 50 — Proportion input and error handling
+## Test 55 — Proportion input and error handling
 
 **Expected:** `level = 0.90` is treated the same as `level = 90` (auto-multiplied
 by 100). `level = 40` produces an error.
@@ -694,27 +754,32 @@ tryCatch(
 
 # wide / width — Display options
 
-## Test 51 — exp = TRUE suppresses CIs with a message
+## Test 56 — exp = TRUE with CIs: linear regression
 
-**Expected:** A message is printed ("Note: wide output is not yet supported
-with exp = TRUE; CIs suppressed.") and the output has no CI columns.
+**Expected:** `exp(b)` and `DMSE` column headers. CI columns present with
+exponentiated bounds: `exp(ci_lower)` and `exp(ci_upper)`. No suppression
+message.
 
 ```{r}
 m51 <- lm(mpg ~ cyl + wt, data = mtcars)
-cat("exp = TRUE, wide = TRUE (should message, suppress CIs):\n")
+cat("exp = TRUE, wide = TRUE:\n")
 tula(m51, exp = TRUE, wide = TRUE)
 ```
 
-## Test 52 — exp = TRUE with explicit wide = FALSE (no message)
+## Test 57 — exp = TRUE with CIs: logistic regression
 
-**Expected:** No message about CIs when `wide = FALSE` is set explicitly.
+**Expected:** `exp(b)` column shows odds ratios. CI columns show exponentiated
+bounds (odds ratio CIs). Compare with `exp(confint.default())`.
 
 ```{r}
-cat("exp = TRUE, wide = FALSE (should NOT message):\n")
-tula(m51, exp = TRUE, wide = FALSE)
+m52 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+cat("exp = TRUE, wide = TRUE:\n")
+tula(m52, exp = TRUE, wide = TRUE)
+cat("\nVerification — exp(confint.default):\n")
+print(exp(confint.default(m52)))
 ```
 
-## Test 53 — width below minimum (warning + clamp to 60)
+## Test 58 — width below minimum (warning + clamp to 60)
 
 **Expected:** A warning is issued ("width cannot be less than 60; using
 width = 60.") and the output is produced at width = 60.
@@ -731,7 +796,7 @@ withCallingHandlers(
 
 # Edge cases
 
-## Test 54 — Very small p-values
+## Test 59 — Very small p-values
 
 **Expected:** p-values below 0.0001 display as `<.0001`.
 
@@ -740,7 +805,7 @@ m54 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
 tula(m54)
 ```
 
-## Test 55 — Single predictor (minimal model)
+## Test 60 — Single predictor (minimal model)
 
 **Expected:** Header and table format correctly with just one covariate row
 plus the intercept.
@@ -750,7 +815,7 @@ m55 <- lm(mpg ~ wt, data = mtcars)
 tula(m55)
 ```
 
-## Test 56 — Ordered factor as predictor
+## Test 61 — Ordered factor as predictor
 
 **Expected:** Ordered factors are treated the same as regular factors — grouped
 under a header row with indented levels.
@@ -761,7 +826,7 @@ m56 <- lm(mpg ~ gear_o + wt, data = mtcars)
 tula(m56)
 ```
 
-## Test 57 — glm with small sample (stress test)
+## Test 62 — glm with small sample (stress test)
 
 ```{r}
 iris_bin <- iris
@@ -771,7 +836,7 @@ m57 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
 tula(m57)
 ```
 
-## Test 58 — Unsupported object type (error handling)
+## Test 63 — Unsupported object type (error handling)
 
 **Expected:** A clear, informative error message naming the unsupported class.
 

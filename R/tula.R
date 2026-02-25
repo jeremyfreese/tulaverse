@@ -48,8 +48,7 @@
 #'   column shows `exp(b)` and the standard error column shows the delta-method
 #'   standard error (`exp(b) * SE(b)`), labelled `"DMSE"`. The test statistic
 #'   and p-value are unchanged. Reference-level rows show `1` instead of `0`.
-#'   When `exp = TRUE`, confidence interval columns are suppressed (`wide` is
-#'   forced to `FALSE`); exponentiated CIs may be supported in a future version.
+#'   When `wide = TRUE`, CI bounds are also exponentiated.
 #'   Default `FALSE`. Ignored for summarize output.
 #' @param ... Additional arguments passed to model-specific methods (reserved
 #'   for future extensions).

@@ -3,11 +3,6 @@
 tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                      width = NULL, exp = FALSE, level = 95, ...) {
   level <- .resolve_level(level)
-  # When exp = TRUE, suppress CIs (exponentiated CIs not yet supported)
-  if (isTRUE(exp) && (isTRUE(wide) || is.null(wide))) {
-    message("Note: wide output is not yet supported with exp = TRUE; CIs suppressed.")
-    wide <- FALSE
-  }
   wide   <- .resolve_wide(wide, width)
   s      <- summary(model)
   n_obs  <- stats::nobs(model)
