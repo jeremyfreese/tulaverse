@@ -1,0 +1,193 @@
+---
+title: "The Tulaverse: Stata-Inspired Output in R"
+format: html
+---
+
+The **tulaverse** package brings clean, readable console output to R.
+One function call gives you formatted regression tables, descriptive
+statistics, frequency tabulations, and more.
+
+## Installation
+
+```{r}
+#| eval: false
+# install.packages("remotes")
+remotes::install_github("jeremyfreese/tulaverse")
+```
+
+```{r}
+#| include: false
+library(tulaverse)
+library(haven)
+library(nnet)
+
+gss_full <- read_dta("/Users/jeremyfreese/Library/CloudStorage/Dropbox/GSS/gss7224_r2.dta")
+
+gss <- gss_full[gss_full$year == 2024,
+  c("age", "sex", "race", "educ", "degree", "realrinc",
+    "happy", "health", "marital", "polviews", "partyid",
+    "attend", "childs", "hrs1")]
+
+gss$very_happy <- as.numeric(gss$happy == 1)
+```
+
+# tula()
+
+The examples below use an extract from the 2024 General Social Survey ---
+a nationally representative survey of American adults conducted since 1972.
+
+## Descriptive statistics
+
+One function call produces a clean, readable summary of every variable in a
+data frame:
+
+```{r}
+tula(gss)
+```
+
+## Codebook
+
+For a deeper look at each variable --- type, range, missingness, and either
+a frequency tabulation or percentile summary --- add `codebook = TRUE`:
+
+```{r}
+tula(gss[, c("happy", "polviews", "educ", "realrinc")], codebook = TRUE)
+```
+
+## OLS regression
+
+`tula()` wraps any fitted model in formatted output --- a header block with
+fit statistics and a clean coefficient table:
+
+```{r}
+m_ols <- lm(realrinc ~ educ + age + sex + race, data = gss)
+tula(m_ols)
+```
+
+## Display options
+
+Add confidence intervals with `wide = TRUE`, show reference levels for factor
+variables with `ref = TRUE`, and adjust the confidence level with `level`:
+
+```{r}
+tula(m_ols, wide = TRUE, ref = TRUE, level = 90)
+```
+
+## Robust standard errors
+
+Heteroskedasticity-robust standard errors are one argument away. The column
+header updates automatically:
+
+```{r}
+tula(m_ols, robust = TRUE)
+```
+
+## Logistic regression
+
+Here we predict whether respondents report being "very happy" (vs. pretty
+happy or not too happy):
+
+```{r}
+m_logit <- glm(very_happy ~ educ + age + health + marital,
+               data = gss, family = binomial)
+tula(m_logit)
+```
+
+Add `exp = TRUE` to see odds ratios instead of log-odds:
+
+```{r}
+tula(m_logit, exp = TRUE, wide = TRUE)
+```
+
+## Multinomial logit
+
+For outcomes with more than two categories, `tula()` handles multinomial
+logit via `nnet::multinom()`. Here we model the three-category happiness
+variable directly:
+
+```{r}
+#| message: false
+m_mlogit <- multinom(happy ~ educ + age + health, data = gss)
+tula(m_mlogit)
+```
+
+With `parallel = TRUE`, the outcome categories are displayed side by side
+with significance stars --- a compact view for comparing coefficients
+across outcomes:
+
+```{r}
+tula(m_mlogit, parallel = TRUE)
+```
+
+# tulatab()
+
+## Frequency tables
+
+`tulatab()` produces frequency tables with haven value labels displayed
+automatically:
+
+```{r}
+tulatab(polviews, data = gss)
+```
+
+## Crosstabulations
+
+Pass two variables to get a two-way table with column percentages (use
+`pct = "row"` or `pct = "cell"` for alternative layouts):
+
+```{r}
+tulatab(happy, degree, data = gss)
+```
+
+## Mean crosstab
+
+Replace cell frequencies with means of a numeric variable using `mean =`:
+
+```{r}
+tulatab(degree, sex, data = gss, mean = realrinc)
+```
+
+# tulaplot()
+
+## Visualization
+
+`tulaplot()` is a thin wrapper around `ggplot()` that applies a clean theme
+with larger text and sensible defaults:
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+tulaplot(gss, ggplot2::aes(x = educ, y = realrinc)) +
+  ggplot2::geom_point(alpha = 0.3) +
+  ggplot2::geom_smooth(method = "lm", se = FALSE) +
+  ggplot2::labs(x = "Years of education", y = "Income (constant $)",
+                title = "Education and income, GSS 2024")
+```
+
+Use `scale_fill_tula()` for a matching color palette:
+
+```{r}
+#| fig-width: 7
+#| fig-height: 5
+tulaplot(gss[!is.na(gss$degree) & !is.na(gss$happy), ],
+         ggplot2::aes(x = as_factor(degree), fill = as_factor(happy))) +
+  ggplot2::geom_bar(position = "fill") +
+  scale_fill_tula() +
+  ggplot2::labs(x = "Highest degree", y = "Proportion", fill = "Happiness",
+                title = "Happiness by education level, GSS 2024") +
+  ggplot2::scale_y_continuous(labels = scales::percent)
+```
+
+# What else?
+
+The tulaverse supports many more model types out of the box:
+
+- **Negative binomial** (`MASS::glm.nb`)
+- **Ordered logit/probit** (`MASS::polr`, `ordinal::clm`)
+- **Cox proportional hazards** (`survival::coxph`)
+- **Quantile regression** (`quantreg::rq`)
+- **Fixed effects models** (`fixest::feols`, `feglm`, `fepois`, `fenegbin`)
+- **Tobit / survival regression** (`AER::tobit`, `survival::survreg`)
+
+Each one uses the same `tula()` call and supports the same display options
+(`wide`, `ref`, `exp`, `robust`, `level`, and more).

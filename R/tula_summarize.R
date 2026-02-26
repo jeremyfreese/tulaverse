@@ -105,7 +105,10 @@
   }
 
   # Numeric / integer
-  non_na <- col[!is.na(col)]
+  # as.numeric() strips haven_labelled class so that min/max values from
+
+  # different variables can be safely rbound without vctrs casting errors.
+  non_na <- as.numeric(col[!is.na(col)])
   n_obs  <- length(non_na)
 
   mean_val <- if (n_obs == 0L) NA_real_ else {
