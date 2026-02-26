@@ -236,8 +236,11 @@ model classes: \code{lm}, \code{glm}, \code{negbin} (negative binomial via
 \code{polr} (ordered regression via \code{\link[MASS:polr]{MASS::polr()}}), \code{clm} (ordered regression
 via \code{\link[ordinal:clm]{ordinal::clm()}}), \code{coxph} (Cox proportional hazards via
 \code{\link[survival:coxph]{survival::coxph()}}), \code{rq} and \code{rqs} (quantile regression via
-\code{\link[quantreg:rq]{quantreg::rq()}}). When passed a data frame or atomic vector, produces
-descriptive statistics output.}
+\code{\link[quantreg:rq]{quantreg::rq()}}), \code{fixest} (fixed effects models via \code{\link[fixest:feols]{fixest::feols()}},
+\code{\link[fixest:feglm]{fixest::feglm()}}, \code{\link[fixest:feglm]{fixest::fepois()}}, \code{\link[fixest:femlm]{fixest::fenegbin()}}),
+\code{survreg} (tobit / survival regression via \code{\link[AER:tobit]{AER::tobit()}} or
+\code{\link[survival:survreg]{survival::survreg()}}). When passed a data frame or atomic vector,
+produces descriptive statistics output.}
 
 \item{wide}{Logical or \code{NULL}. If \code{TRUE}, 95\% confidence interval columns
 are added. If \code{FALSE}, they are omitted. If \code{NULL} (the default),

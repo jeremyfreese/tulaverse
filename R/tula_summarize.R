@@ -139,6 +139,16 @@
 # Print method
 # ---------------------------------------------------------------------------
 
+#' Print method for tula_summary objects
+#'
+#' Prints a Stata-inspired descriptive statistics table with columns for
+#' Obs, Mean (or Median), Std. Dev. (or MAD/IQR), Min, and Max.
+#' Factor variables are expanded into per-level rows showing counts
+#' and proportions.
+#'
+#' @param x A `tula_summary` object (from `tula()` with a data frame or vector).
+#' @param ... Ignored (for S3 compatibility).
+#' @return Invisibly returns `x`.
 #' @export
 print.tula_summary <- function(x, ...) {
   # Fixed numeric column widths

@@ -16,8 +16,11 @@
 #'   `polr` (ordered regression via [MASS::polr()]), `clm` (ordered regression
 #'   via [ordinal::clm()]), `coxph` (Cox proportional hazards via
 #'   [survival::coxph()]), `rq` and `rqs` (quantile regression via
-#'   [quantreg::rq()]). When passed a data frame or atomic vector, produces
-#'   descriptive statistics output.
+#'   [quantreg::rq()]), `fixest` (fixed effects models via [fixest::feols()],
+#'   [fixest::feglm()], [fixest::fepois()], [fixest::fenegbin()]),
+#'   `survreg` (tobit / survival regression via [AER::tobit()] or
+#'   [survival::survreg()]). When passed a data frame or atomic vector,
+#'   produces descriptive statistics output.
 #' @param wide Logical or `NULL`. If `TRUE`, 95% confidence interval columns
 #'   are added. If `FALSE`, they are omitted. If `NULL` (the default),
 #'   confidence intervals are shown automatically when the effective output

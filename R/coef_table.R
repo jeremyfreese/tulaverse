@@ -37,7 +37,7 @@
 #'   for haven label lookup when factor-wrapping in the formula strips labels.
 #'
 #' @return A data frame with columns:
-#'   label, is_factor_header, is_intercept, is_ref,
+#'   label, is_factor_header, is_intercept, is_ref, is_cutpoint,
 #'   estimate, std_err, statistic, p_value, ci_lower, ci_upper.
 build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
                           assign_vec   = NULL,
@@ -540,9 +540,20 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'
 #' @param coef_df Data frame from `build_coef_df()`.
 #' @param stat_label Character. Column header for the test statistic ("t" or "z").
-#' @param wide Logical. If TRUE, include 95% CI columns.
+#' @param wide Logical. If TRUE, include CI columns.
 #' @param total_width Integer. Total line width (must equal header total width).
 #'   The label column expands to fill: lbl_w = total_width - num_cols_width.
+#' @param exp Logical. If TRUE, exponentiate estimates and compute delta-method
+#'   SEs. Test statistics and p-values are unchanged. Cutpoint rows are never
+#'   exponentiated. Default FALSE.
+#' @param exp_label Character or NULL. When non-NULL and `exp = TRUE`, replaces
+#'   the default `"exp(b)"` column header (e.g. `"IRR"`, `"Haz. Ratio"`).
+#' @param level Numeric. CI width as a percentage (e.g. 95, 90, 99). Controls
+#'   the CI column header label (e.g. `"[95% Conf"` vs `"[90% Conf"`).
+#'   Default 95.
+#' @param se_label Character or NULL. When non-NULL, overrides the SE column
+#'   header (e.g. `"Robust SE"`). Takes precedence over `"DMSE"` when both
+#'   `se_label` and `exp` are active.
 #'
 #' @return Character vector, one element per line.
 format_coef_table <- function(coef_df, stat_label, wide, total_width,
@@ -722,6 +733,9 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 #' @param wide Logical. Whether CI columns are displayed.
 #' @param total_width Integer. Total output line width (must match the
 #'   coefficient table width).
+#' @param level Numeric. CI width as a percentage (e.g. 95). Currently unused
+#'   in this function but accepted for API consistency with
+#'   `format_coef_table()`. Default 95.
 #' @return Character vector of lines (separator + row pairs).
 format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
   cw_coef <- 10L
