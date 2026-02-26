@@ -8,5 +8,9 @@
 *.html
 *_files/
 
+# Claude Code
+CLAUDE.md
+.claude/
+
 # Mac OS
 .DS_Store
