@@ -1,4 +1,4 @@
-Package: tula
+Package: tulaverse
 Type: Package
 Title: Stata-Inspired Console Output and Visualization for R
 Version: 0.1.0
