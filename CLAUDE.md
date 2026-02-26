@@ -23,8 +23,8 @@ It records architectural decisions and how-to patterns for this package.
 distinct input types:
 
 - **Regression models** (`lm`, `glm`, `negbin`, `multinom`, `polr`, `clm`,
-  `rq`, `rqs`, `coxph`, and future model types): coefficient table with header
-  block (fit statistics).
+  `rq`, `rqs`, `coxph`, `fixest`, `survreg`, and future model types):
+  coefficient table with header block (fit statistics).
 - **Data frames / vectors** (the "summarize path"): Stata `-summarize`-style
   descriptive statistics table. With `codebook = TRUE`, produces Stata
   `-codebook-`-style per-variable blocks instead.
@@ -47,6 +47,8 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/tula_coxph.R` | `tula.coxph()` method (Cox proportional hazards via `survival::coxph`) |
 | `R/tula_clm.R` | `tula.clm()` method (ordered regression via `ordinal::clm`) |
 | `R/tula_rq.R` | `tula.rq()`, `tula.rqs()`, `new_tula_rqs_output()`, `print.tula_rqs_output()` |
+| `R/tula_fixest.R` | `tula.fixest()`, `tula.fixest_multi()`, `.fixest_resolve_vcov()`, `.fixest_parse_coefnames()`, `.fixest_headers()`, `.fixest_ancillary()` |
+| `R/tula_survreg.R` | `tula.survreg()` method (tobit/survival regression via `AER::tobit` or `survival::survreg`), `.survreg_dep_var()` |
 | `R/tulaplot.R` | `tulaplot()`, `theme_tula()`, `scale_color_tula()`, `scale_fill_tula()`, `.tula_palette` |
 | `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `format_ancillary_rows()`, `.truncate_label()`, `.build_cutpoint_rows()`, row constructors |
 | `R/header.R` | `format_header()`, `compute_total_width()` |
@@ -829,6 +831,232 @@ Each quantile block is summarized by constructing a lightweight single-tau
 `rq` object from the multi-tau model's coefficient and residual columns,
 then calling `summary(..., se = "nid")` on it. This avoids re-fitting
 but gives proper standard errors.
+
+---
+
+## Fixed effects models (`fixest`)
+
+### Key structural features
+
+- **S3 class**: All fixest estimators (`feols`, `feglm`, `fepois`, `fenegbin`)
+  return class `"fixest"`. A single `tula.fixest()` method handles all types,
+  branching on `model$method`.
+- **`fixest` is in Suggests**, not Imports.
+- **`fixest_multi`**: Multiple estimations (e.g. `csw()`) return class
+  `"fixest_multi"`. A dedicated `tula.fixest_multi()` method produces a clear
+  error message.
+
+### Model type branching (`model$method`)
+
+| `model$method` | Description | stat_label | Header stats |
+|----------------|-------------|------------|--------------|
+| `"feols"` | OLS / panel OLS | `"t"` | R², Adj R², Within R² (if FE) |
+| `"feglm"` | GLM with FE | `"z"` | AIC, BIC, Log lik, Pseudo R² |
+| `"fepois"` | Poisson regression | `"z"` | AIC, BIC, Log lik, Pseudo R² |
+| `"fenegbin"` | Negative binomial | `"z"` | AIC, BIC, Log lik, Pseudo R² + ancillary |
+
+### Fixed effects display
+
+Fixed effects are **absorbed** — they don't appear in the coefficient table.
+They are shown in the `family_label` header line:
+
+```
+OLS / Fixed effects: state (50), year (20)
+Family: binomial / Link: logit / Fixed effects: cyl (3)
+Poisson regression / Fixed effects: g (10)
+```
+
+Accessed via `model$fixef_vars` (character vector) and `model$fixef_sizes`
+(named integer vector).
+
+### SE handling — fixest native vcov
+
+fixest has its own vcov ecosystem. The `R/robust.R` helpers
+(`.resolve_robust_vcov()`, etc.) are **NOT used** for fixest models.
+Instead, tula's standard `robust`/`vcov`/`cluster` args are translated
+into fixest's native format via `.fixest_resolve_vcov()`:
+
+| tula args | fixest vcov |
+|-----------|-------------|
+| `robust=FALSE, vcov=NULL, cluster=NULL` | `NULL` (fixest default) |
+| `robust=TRUE` | `"hetero"` |
+| `vcov="HC3"` (or other HC string) | `"hetero"` (warning: fixest only supports HC1) |
+| `cluster="state"` | `~state` (formula) |
+| `vcov=matrix(...)` | Error (not supported) |
+
+The resolved vcov is passed to both `summary(model, vcov = ...)` and
+`confint(model, vcov = ..., level = ...)`.
+
+### Coefficient name parsing
+
+fixest does NOT provide standard R model infrastructure (`terms()`,
+`model.matrix()` assign attribute, `xlevels`). Coefficient names are
+parsed directly by `.fixest_parse_coefnames()`:
+
+| Pattern | Source | Example | Detected as |
+|---------|--------|---------|-------------|
+| `var::level` | `i(var, ref=...)` | `"cyl::6"` | Factor |
+| `factor(var)level` | `factor(var)` | `"factor(cyl)6"` | Factor |
+| `(Intercept)` | intercept | `"(Intercept)"` | Intercept |
+| `var` | continuous | `"wt"` | Numeric |
+
+The function produces `assign_vec`, `term_labels`, `data_classes`, and
+`xlevels` — all four are passed explicitly to `build_coef_df()`.
+
+**Coefficient renaming**: Before passing to `build_coef_df()`, `i()` style
+coefficient names are renamed from `"cyl::6"` to `"cyl6"` via a `rename_map`.
+This ensures `build_coef_df()` correctly computes the level suffix (it strips
+the term name from the coefficient name).
+
+**Reference level detection**: For `i()` variables, the reference level is
+extracted from `model$model_matrix_info` (which stores `ref` and
+`coef_names_full`). For `factor()` variables, the reference level is
+determined from the original data.
+
+### confint quirk
+
+`confint.fixest()` returns a **data.frame** (not a matrix). The method
+converts it: `ci <- as.matrix(confint(model, vcov = ..., level = ...))`.
+
+### fenegbin ancillary parameters
+
+fenegbin includes `.theta` as a row in `summary()$coeftable`. The method:
+1. Extracts the `.theta` row before passing `ct` to `build_coef_df()`
+2. Computes `/lnalpha` and `alpha` via delta method (same as `tula.negbin()`)
+3. Passes `ancillary_df` to `new_tula_output()`
+
+### exp_label
+
+| Method | `exp_label` when `exp = TRUE` |
+|--------|-------------------------------|
+| `"fepois"` | `"IRR"` |
+| `"fenegbin"` | `"IRR"` |
+| `"feglm"` (logit link) | `"Odds Ratio"` |
+| `"feols"` | `NULL` |
+
+### dep_var extraction
+
+```r
+dep_var <- tryCatch(deparse(model$fml[[2L]]), error = function(e) NULL)
+```
+
+### Key functions in `R/tula_fixest.R`
+
+| Function | Purpose |
+|----------|---------|
+| `tula.fixest()` | Main S3 method for fixest models |
+| `tula.fixest_multi()` | Error method for multi-estimation objects |
+| `.fixest_guard_multi()` | Belt-and-suspenders guard |
+| `.fixest_stat_label()` | Detect "t" vs "z" from coeftable column name |
+| `.fixest_resolve_vcov()` | Translate tula SE args → fixest vcov format |
+| `.fixest_parse_coefnames()` | Parse coefficient names for factor grouping |
+| `.fixest_headers()` | Build header blocks and family_label |
+| `.fixest_ancillary()` | Build ancillary_df for fenegbin |
+
+---
+
+## Tobit / Survival regression (`survival::survreg`, `AER::tobit`)
+
+### Key structural features
+
+- **S3 class**: `AER::tobit()` returns class `c("tobit", "survreg")`.
+  `survival::survreg()` returns class `"survreg"`. Dispatching on `survreg`
+  catches both.
+- **`survival` and `AER` are in Suggests**, not Imports.
+- **stat_label**: `"t"` — matching Stata's tobit convention.
+- **Summary table differences**: `summary.tobit` (AER) stores the coefficient
+  table in `s$coefficients` as an object of class `"coeftest"`. `summary.survreg`
+  (survival) stores it in `s$table`. Both include `Log(scale)` as the last row.
+  Detection:
+  ```r
+  ct_full <- if ("coefficients" %in% names(s) &&
+                 inherits(s[["coefficients"]], "coeftest")) {
+    s[["coefficients"]]          # AER::tobit path
+  } else {
+    s[["table"]]                 # survival::survreg path
+  }
+  ```
+- **Log(scale) separation**: `coef(model)` returns K predictor coefficients,
+  but the summary table has K+1 rows. Predictor rows: `ct_full[1:n_pred, ]`.
+  Last row (`Log(scale)`) used for ancillary parameter computation only.
+- **Header**: Left = AIC, BIC, Log likelihood. Right = Number of obs,
+  Pseudo R-sq. **No LR chi2 or Prob > chi2** (excluded per user decision).
+- **family_label**: `"Tobit regression"` when `inherits(model, "tobit")`;
+  `"Survival regression / Distribution: <name>"` for bare survreg (Weibull,
+  Exponential, Log-normal, etc.).
+- **Pseudo R-sq**: McFadden = `1 - model$loglik[2] / model$loglik[1]`. Both
+  values available directly from the model object (no null-model refitting
+  needed, unlike negbin).
+
+### Censoring types
+
+All common censoring configurations are supported:
+
+| Censoring | `AER::tobit()` call | `Surv()` type |
+|-----------|---------------------|---------------|
+| Left only (standard tobit) | `tobit(..., left = 0)` | `"left"` |
+| Right only | `tobit(..., left = -Inf, right = 12)` | `"right"` |
+| Both limits | `tobit(..., left = 0, right = 12)` | `"interval"` |
+| Interval censored | (use `survreg` directly) | `"interval2"` |
+
+### Censoring observation counts
+
+The right header block shows Uncensored / Left-censored / Right-censored /
+Interval-censored counts extracted from `model$y` via `.survreg_cens_counts()`.
+Only non-zero categories are shown (e.g. a left-only tobit shows Uncensored
+and Left-censored; a both-limits tobit adds Right-censored).
+
+### Ancillary parameter: `/sigma`
+
+Only `/sigma` is shown (matching Stata). `Log(scale)` is not displayed
+directly. **Exception**: the exponential distribution has a fixed scale = 1
+(no estimated `Log(scale)` row), so `ancillary_df` is NULL and no `/sigma`
+row appears.
+
+- `sigma = model$scale = exp(Log(scale))`
+- SE via delta method: `se_sigma = sigma * SE(Log(scale))`
+- CI: Wald CI on log scale, then exponentiate (asymmetric, correct):
+  ```r
+  ci_sigma_lo <- exp(log_scale_est - z_crit * se_log_scale)
+  ci_sigma_hi <- exp(log_scale_est + z_crit * se_log_scale)
+  ```
+- Ancillary row is NOT affected by `exp = TRUE`.
+
+### dep_var extraction
+
+For AER::tobit, `formula(model)[[2L]]` returns a `Surv(...)` expression
+(e.g. `Surv(ifelse(affairs <= 0, 0, affairs), affairs > 0, type = "left")`),
+not the original variable name. The `.survreg_dep_var()` helper recovers
+the bare name:
+
+1. Try `model$call$formula` (stores the original formula as typed).
+2. Parse the LHS; if it looks like `Surv(varname, ...)`, extract
+   `varname` via regex `"^Surv\\(([^,)]+)"`.
+3. Fallback: parse `formula(model)[[2L]]` with the same regex.
+
+### Robust SE notes
+
+`sandwich::vcovHC()` does **not** support survreg (fails with
+"non-conformable arrays"). The existing `.resolve_robust_vcov()` fallback
+to `sandwich::sandwich()` works correctly. The result is a (K+1)×(K+1)
+matrix including `Log(scale)`, but `.recompute_ct_robust()` subsets by
+`rownames(ct)` — naturally ignoring the extra dimension.
+
+`sandwich::vcovCL()` (cluster-robust) also works for survreg.
+
+### CIs (non-robust)
+
+Uses `confint.default(model)` (Wald CIs), NOT `confint(model)` (profile
+likelihood, which is slow). `confint.default()` on survreg includes the
+`Log(scale)` row — must subset: `ci[1:n_pred, ]`.
+
+### Key functions in `R/tula_survreg.R`
+
+| Function | Purpose |
+|----------|---------|
+| `tula.survreg()` | Main S3 method for tobit and survreg models |
+| `.survreg_cens_counts()` | Extract censoring observation counts from `model$y` |
+| `.survreg_dep_var()` | Extract original dep var name from Surv() wrapper |
 
 ---
 

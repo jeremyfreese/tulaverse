@@ -435,9 +435,10 @@ print.tula_output <- function(x, ...) {
   max_w <- .resolve_width(x$width)
   vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
-  # Include ancillary labels (if any) in width computation
+  # Include ancillary labels and dep_var (if any) in width computation
   anc_labels <- if (!is.null(x$ancillary_df)) x$ancillary_df$label else character(0)
-  all_labels <- c(x$coef_df$label, anc_labels)
+  dep_label  <- if (!is.null(x$dep_var) && nchar(x$dep_var) > 0L) x$dep_var else character(0)
+  all_labels <- c(x$coef_df$label, anc_labels, dep_label)
 
   natural_width <- compute_total_width(
     header_left  = x$header_left,

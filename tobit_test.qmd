@@ -1,0 +1,182 @@
+---
+title: "tula.survreg() — Tobit / Survival Regression Tests"
+format: html
+---
+
+```{r setup}
+devtools::load_all(".")
+library(AER)
+library(survival)
+data(Affairs, package = "AER")
+```
+
+## Test 1 — Basic tobit (AER Affairs data)
+
+Matches the user's Stata example: `tobit affairs age yearsmarried religiousness rating, ll(0)`
+
+```{r test1}
+m1 <- tobit(affairs ~ age + yearsmarried + religiousness + rating, data = Affairs)
+cat("--- summary() ---\n")
+summary(m1)
+```
+
+```{r test1-tula}
+cat("--- tula() ---\n")
+tula(m1)
+```
+
+## Test 2 — Factor variable
+
+```{r test2}
+m2 <- tobit(affairs ~ factor(children) + age + yearsmarried, data = Affairs)
+cat("--- summary() ---\n")
+summary(m2)
+```
+
+```{r test2-tula}
+cat("--- tula() ---\n")
+tula(m2)
+```
+
+## Test 3 — wide = FALSE (narrow output)
+
+```{r test3}
+cat("--- tula(wide = FALSE) ---\n")
+tula(m1, wide = FALSE)
+```
+
+## Test 4 — robust = TRUE
+
+Uses sandwich::sandwich() fallback since vcovHC() does not support survreg.
+
+```{r test4}
+cat("--- tula(robust = TRUE) ---\n")
+tula(m1, robust = TRUE)
+```
+
+## Test 5 — ref = TRUE
+
+Shows reference level for factor variable.
+
+```{r test5}
+cat("--- tula(ref = TRUE) ---\n")
+tula(m2, ref = TRUE)
+```
+
+## Test 6 — exp = TRUE
+
+Exponentiated coefficients (less common for tobit, but should work).
+
+```{r test6}
+cat("--- tula(exp = TRUE) ---\n")
+tula(m1, exp = TRUE)
+```
+
+## Test 7 — Bare survreg (Weibull, ovarian data)
+
+Tests the non-tobit code path with a different distribution.
+
+```{r test7}
+m_sv <- survreg(Surv(futime, fustat) ~ ecog.ps + rx + age,
+                data = ovarian, dist = "weibull")
+cat("--- summary() ---\n")
+summary(m_sv)
+```
+
+```{r test7-tula}
+cat("--- tula() ---\n")
+tula(m_sv)
+```
+
+## Test 8 — Exponential distribution (no Log(scale) row)
+
+Exponential has a fixed scale = 1, so no `/sigma` ancillary row should appear.
+
+```{r test8}
+m_exp <- survreg(Surv(futime, fustat) ~ ecog.ps + rx + age,
+                 data = ovarian, dist = "exponential")
+cat("--- summary() ---\n")
+summary(m_exp)
+```
+
+```{r test8-tula}
+cat("--- tula() ---\n")
+tula(m_exp)
+```
+
+## Test 9 — Right-censored tobit
+
+```{r test9}
+m_right <- tobit(affairs ~ age + yearsmarried + religiousness + rating,
+                 data = Affairs, left = -Inf, right = 12)
+cat("--- tula() ---\n")
+tula(m_right)
+```
+
+## Test 10 — Both-limits (interval) tobit
+
+Shows Uncensored, Left-censored, and Right-censored counts in header.
+
+```{r test10}
+m_both <- tobit(affairs ~ age + yearsmarried + religiousness + rating,
+                data = Affairs, left = 0, right = 12)
+cat("--- tula() ---\n")
+tula(m_both)
+```
+
+## Test 11 — Interval regression (Affairs data, Surv type = "interval2")
+
+Left-censored at 0 (affairs reported as 0) and interval-censored for positive
+values (reported in a band). Uses `survreg` directly with `dist = "gaussian"`.
+
+```{r test11}
+d <- Affairs
+d$lo <- ifelse(d$affairs == 0, -Inf, d$affairs - 0.5)
+d$hi <- ifelse(d$affairs == 0, 0, d$affairs + 0.5)
+
+m_int <- survreg(Surv(lo, hi, type = "interval2") ~ age + yearsmarried +
+                   religiousness + rating,
+                 data = d, dist = "gaussian")
+cat("--- summary() ---\n")
+summary(m_int)
+```
+
+```{r test11-tula}
+cat("--- tula() ---\n")
+tula(m_int)
+```
+
+## Test 12 — Pure interval-censored data (simulated)
+
+Every observation is interval-censored (observed in a unit-width band around
+the true value). No left- or right-censored observations.
+
+```{r test12}
+set.seed(42)
+n <- 200
+x1 <- rnorm(n)
+x2 <- rnorm(n)
+y_true <- 5 + 2 * x1 - 1.5 * x2 + rnorm(n, sd = 2)
+lo2 <- floor(y_true)
+hi2 <- lo2 + 1
+
+m_int2 <- survreg(Surv(lo2, hi2, type = "interval2") ~ x1 + x2,
+                  dist = "gaussian")
+cat("--- summary() ---\n")
+summary(m_int2)
+```
+
+```{r test12-tula}
+cat("--- tula() ---\n")
+tula(m_int2)
+```
+
+## Test 13 — Existing tula(lm) still works
+
+Backward compatibility check.
+
+```{r test13}
+m_lm <- lm(mpg ~ wt, data = mtcars)
+cat("--- tula(lm) ---\n")
+tula(m_lm)
+```
