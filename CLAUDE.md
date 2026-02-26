@@ -48,7 +48,7 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/tula_clm.R` | `tula.clm()` method (ordered regression via `ordinal::clm`) |
 | `R/tula_rq.R` | `tula.rq()`, `tula.rqs()`, `new_tula_rqs_output()`, `print.tula_rqs_output()` |
 | `R/tula_fixest.R` | `tula.fixest()`, `tula.fixest_multi()`, `.fixest_resolve_vcov()`, `.fixest_parse_coefnames()`, `.fixest_headers()`, `.fixest_ancillary()` |
-| `R/tula_survreg.R` | `tula.survreg()` method (tobit/survival regression via `AER::tobit` or `survival::survreg`), `.survreg_dep_var()` |
+| `R/tula_survreg.R` | `tula.survreg()` method (tobit/survival regression via `AER::tobit` or `survival::survreg`), `.survreg_cens_counts()`, `.survreg_dep_var()` |
 | `R/tulaplot.R` | `tulaplot()`, `theme_tula()`, `scale_color_tula()`, `scale_fill_tula()`, `.tula_palette` |
 | `R/coef_table.R` | `build_coef_df()`, `format_coef_table()`, `format_ancillary_rows()`, `.truncate_label()`, `.build_cutpoint_rows()`, row constructors |
 | `R/header.R` | `format_header()`, `compute_total_width()` |
@@ -59,6 +59,14 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `new_tula_crosstab()`, `print.tula_crosstab()`, `new_tula_crosstab_by()`, `print.tula_crosstab_by()`, `.extract_var_name()` |
 | `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.format_tab_mean_table()`, `.compute_oneway_means()`, `.truncate_tab_label()` |
 | `R/crosstab_helpers.R` | `.build_crosstab()`, `.build_mean_crosstab()`, `.crosstab_display_levels()`, `.format_crosstab_table()`, `.render_crosstab_panel()`, `.wrap_row_header()`, `.wrap_col_label()`, `.compute_crosstab_pct()`, `.crosstab_by_levels()` |
+
+### Test files
+
+| File | Covers |
+|------|--------|
+| `visual_test.qmd` | All model types except fixest and survreg; summarize, codebook, tulatab |
+| `fixest_test.qmd` | `tula.fixest()` — feols, feglm, fepois, fenegbin; FE display; SE handling |
+| `tobit_test.qmd` | `tula.survreg()` — tobit (left/right/interval), bare survreg (Weibull, exponential), interval regression |
 
 ---
 
@@ -168,11 +176,16 @@ always stores raw (unexponentiated) values.
 ### `exp_label`
 
 Optional character scalar on `tula_output`. When `exp = TRUE` and `exp_label`
-is non-NULL, it replaces the default `"exp(b)"` column header. Current usage:
+is non-NULL, it replaces the default `"exp(b)"` column header.
 
-- Negative binomial: `"IRR"` (Incidence Rate Ratio)
-- Cox PH: `"Haz. Ratio"` (Hazard Ratio)
-- Future: `"Odds Ratio"` for logistic, `"HR"` for other survival models
+| Model type | `exp_label` | Notes |
+|-----------|-------------|-------|
+| `negbin` (MASS) | `"IRR"` | Incidence Rate Ratio |
+| `coxph` | `"Haz. Ratio"` | Hazard Ratio; Cox defaults to `exp = TRUE` |
+| `fixest` fepois | `"IRR"` | Incidence Rate Ratio |
+| `fixest` fenegbin | `"IRR"` | Incidence Rate Ratio |
+| `fixest` feglm (logit) | `"Odds Ratio"` | Only when link = logit |
+| All others | `NULL` | Shows default `"exp(b)"` header |
 
 ---
 
@@ -266,12 +279,15 @@ to `new_tula_output()`.
 
 ### SE column header
 
-`se_label` flows through the object to `format_coef_table()`. When non-NULL
-and `exp = FALSE`, it replaces `"Std. Err."` in the column header:
+`se_label` flows through the object to `format_coef_table()`. When non-NULL,
+it **always** takes precedence over both `"Std. Err."` and `"DMSE"`,
+regardless of the `exp` setting. The priority chain is:
 
 ```
 se_hdr <- if (!is.null(se_label)) se_label else if (exp) "DMSE" else "Std. Err."
 ```
+
+So `robust = TRUE, exp = TRUE` shows `"Robust SE"`, not `"DMSE"`.
 
 ### Ordered models (polr, clm) — special handling
 
@@ -295,14 +311,45 @@ For `tula.rqs()`, robust SEs are applied per block using a lightweight
 single-tau `rq` object constructed per quantile. A representative
 `robust_info` is also computed before the loop for `se_label` and `cluster_n`.
 
+### Fallback chain in `.resolve_robust_vcov()`
+
+When `robust = TRUE` (and no pre-computed `vcov` matrix is supplied):
+1. Try `sandwich::vcovHC(model, type = ...)` (or `vcovCL()` for cluster).
+2. If `vcovHC()` fails (e.g. survreg: "non-conformable arrays"), fall back
+   to `sandwich::sandwich(model)` — the generic sandwich estimator.
+3. If `sandwich()` also fails, stop with an informative error.
+
+This fallback is important for survreg models, where `vcovHC()` has a
+known dimension mismatch bug but `sandwich()` works correctly.
+
+### Robust SE compatibility by model type
+
+| Model class | `robust = TRUE` | Mechanism | `cluster` | Notes |
+|-------------|-----------------|-----------|-----------|-------|
+| `lm` | Yes | `vcovHC()` | `vcovCL()` | Standard support |
+| `glm` | Yes | `vcovHC()` | `vcovCL()` | Standard support |
+| `negbin` | Yes | `vcovHC()` | `vcovCL()` | Standard support |
+| `multinom` | Yes | `vcovHC()` | `vcovCL()` | Per-outcome submatrix extraction |
+| `polr` | Yes | `sandwich()` fallback | `vcovCL()` | vcovHC fails; sandwich works |
+| `clm` | Yes | `sandwich()` fallback | `vcovCL()` | vcovHC fails; sandwich works |
+| `coxph` | Yes | `sandwich()` fallback | `vcovCL()` | vcovHC fails; sandwich works |
+| `rq` / `rqs` | Yes | `vcovHC()` | `vcovCL()` | Per-quantile application |
+| `survreg` | Yes | `sandwich()` fallback | `vcovCL()` | vcovHC fails; sandwich works |
+| `fixest` | Yes | Native fixest vcov | Native | Does NOT use `R/robust.R`; see fixest section |
+
 ### Graceful error for unsupported models
 
-If `sandwich::vcovHC()` or `vcovCL()` does not support the model class,
+If both `sandwich::vcovHC()` and `sandwich::sandwich()` fail,
 `.resolve_robust_vcov()` stops with an informative message:
 ```
-sandwich::vcovHC() does not support models of class 'clm'.
-Robust SEs are not available for this model type.
+Robust SEs are not available for models of class 'someclass'.
+Neither sandwich::vcovHC() nor sandwich::sandwich() succeeded.
 ```
+
+If the user explicitly requests a specific HC type (e.g. `vcov = "HC4"`)
+and `vcovHC()` fails, the error is propagated immediately without trying
+the `sandwich()` fallback, since the user's specific request cannot be
+fulfilled.
 
 ### Ancillary parameters and `exp = TRUE`
 
@@ -341,14 +388,20 @@ both can be used simultaneously (`exp = TRUE, robust = TRUE`).
 The method needs to:
 1. Accept `level = 95` and resolve it via `.resolve_level(level)`.
 2. Resolve `wide` via `.resolve_wide(wide, width)`.
-4. Run `summary(model)` (or equivalent).
-5. Extract `ct`: a matrix with columns (Estimate, Std. Error, statistic, p-value).
+3. Run `summary(model)` (or equivalent).
+4. Extract `ct`: a matrix with columns (Estimate, Std. Error, statistic, p-value).
    Column names don't matter — only column positions [1:4] are used.
-6. Compute `ci`: a two-column matrix of CI bounds (rownames matching `ct`), or NULL.
-   Pass `level / 100` to `confint()` if it accepts a `level` argument.
-7. Assemble `header_left` and `header_right` as named numeric vectors.
-8. Extract `dep_var` via `deparse(formula(model)[[2L]])`.
-9. Call `build_coef_df()` and `new_tula_output()`, passing `exp`, `dep_var`, `level`.
+5. Compute `ci`: a two-column matrix of CI bounds (rownames matching `ct`), or NULL.
+   Prefer `confint.default()` (Wald CIs) over `confint()` (profile likelihood,
+   which can be slow). Pass `level / 100` to the chosen method.
+6. Assemble `header_left` and `header_right` as named numeric vectors.
+7. Extract `dep_var` — usually `deparse(formula(model)[[2L]])`, but some
+   model types need special handling (see "dep_var exceptions" below).
+8. Set `value_fmts` for any header values needing fixed notation (e.g.
+   `c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3")`).
+9. Call `build_coef_df()` and `new_tula_output()`, passing `exp`, `dep_var`,
+   `level`, `value_fmts`, and optionally `family_label`, `ancillary_df`,
+   `exp_label`, `se_label`.
 
 Minimal template:
 
@@ -371,8 +424,8 @@ tula.MODELTYPE <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   # --- robust SE (optional; requires sandwich in Suggests) ------------------
   # sandwich::vcovHC() and vcovCL() support this model type: YES/NO
-  # (Update this comment when implementing; if NO, robust args are silently
-  # ignored because .resolve_robust_vcov() will error with a clear message.)
+  # (Update this comment when implementing; if unsupported,
+  # .resolve_robust_vcov() will stop() with an informative error message.)
   robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
   if (!is.null(robust_info)) {
     df_resid <- tryCatch(stats::df.residual(model), error = function(e) Inf)
@@ -450,7 +503,7 @@ rows. Models with a non-standard intercept name work correctly.
 ### Example: Cox proportional hazards (now implemented)
 
 See `R/tula_coxph.R` for the full implementation and the
-"Cox proportional hazards" section above for details.
+"Cox proportional hazards" section below for details.
 
 ---
 
@@ -483,7 +536,11 @@ list(
   wide         = FALSE,
   width        = NULL,
   value_fmts   = c(AIC = "f3"),  # named character: header value format overrides
-  exp          = FALSE            # logical; exponentiated coefficients
+  exp          = FALSE,           # logical; exponentiated coefficients
+  parallel     = FALSE,           # logical; side-by-side columns instead of stacked blocks
+  dep_var      = NULL,            # character or NULL; dependent variable name
+  level        = 95,              # numeric; CI width as percentage
+  se_label     = NULL             # character or NULL; overrides "Std. Err." header
 )
 ```
 
@@ -686,10 +743,50 @@ all regression methods. Resolved via `.resolve_level()`:
 
 ### `dep_var` — dependent variable name
 
-All regression methods extract the dependent variable name via
+Most regression methods extract the dependent variable name via
 `deparse(formula(model)[[2L]])` and pass it to `new_tula_output()`. The
 `print.tula_output()` method displays it in the label-column area of the
 column-header line (same pattern as multinomial outcome labels).
+
+**Exceptions** — some model types need special extraction:
+- **survreg/tobit**: `formula()[[2L]]` returns a `Surv(...)` call, not the
+  bare variable name. Uses `.survreg_dep_var()` to recover the original name
+  from `model$call$formula` with regex fallback.
+- **fixest**: Uses `deparse(model$fml[[2L]])` (fixest stores the formula
+  in `$fml`, not accessible via `formula()`).
+- **dep_var width**: `dep_var` occupies the label-column area of the header
+  row. If it's longer than all coefficient labels, it could be truncated.
+  This is handled by including `dep_var` in the `all_labels` vector when
+  computing label column width in `print.tula_output()`.
+
+---
+
+## Shared internal helpers (defined in `R/tula.R`)
+
+Every regression method calls these helpers at the top of its function body.
+They are not exported but are essential to the pipeline.
+
+| Helper | Purpose | Location |
+|--------|---------|----------|
+| `.resolve_level(level)` | Normalises CI level: values < 1 are multiplied by 100 (e.g. `0.95` → `95`). Validates range 50–99.9. Returns the percentage. | `R/tula.R` |
+| `.resolve_wide(wide, width)` | Resolves `wide = NULL` to `TRUE` if effective width ≥ 80, `FALSE` otherwise. Non-NULL values pass through as-is. | `R/tula.R` |
+| `.resolve_width(width)` | Resolves `width = NULL` to `getOption("width")` at print time. Clamps values < 60 to 60 with a warning. `Inf` passes through. | `R/tula.R` |
+| `.parse_tula_opts(ref, label)` | Wraps `ref` and `label` in `isTRUE()` and returns `list(ref = ..., label = ...)`. Called before `build_coef_df()`. | `R/tula.R` |
+
+Canonical usage pattern at the top of every `tula.*()` method:
+
+```r
+level <- .resolve_level(level)
+wide  <- .resolve_wide(wide, width)
+# ... later, before build_coef_df():
+opts    <- .parse_tula_opts(ref, label)
+coef_df <- build_coef_df(model, ct, ci, wide,
+                          ref = opts$ref, label = opts$label)
+```
+
+`.resolve_width()` is called at **print time** (in `print.tula_output()`),
+not at method-dispatch time, so the stored `width = NULL` reflects the
+console width when the object is actually printed.
 
 ---
 
