@@ -1,0 +1,160 @@
+---
+title: "tula() codebook mode — tests"
+format: html
+---
+
+```{r setup}
+devtools::load_all(".")
+```
+
+## Test 1: Basic numeric data frame (mtcars)
+
+All variables are numeric with many unique values, so they should show
+continuous mode (mean, SD, percentiles).
+
+```{r}
+tula(mtcars, codebook = TRUE)
+```
+
+## Test 2: Single vector
+
+```{r}
+tula(mtcars$mpg, codebook = TRUE)
+```
+
+## Test 3: Data frame with factors
+
+```{r}
+df_fac <- data.frame(
+  cyl = factor(mtcars$cyl),
+  gear = factor(mtcars$gear),
+  mpg = mtcars$mpg
+)
+tula(df_fac, codebook = TRUE)
+```
+
+## Test 4: Data frame with character column
+
+```{r}
+df_chr <- data.frame(
+  name = rownames(mtcars),
+  mpg = mtcars$mpg,
+  stringsAsFactors = FALSE
+)
+tula(df_chr, codebook = TRUE)
+```
+
+## Test 5: Numeric variable with few unique values (tabulation mode)
+
+`cyl` has only 3 unique values, `gear` has 3, `am` has 2.
+
+```{r}
+tula(mtcars[, c("cyl", "gear", "am", "mpg")], codebook = TRUE)
+```
+
+## Test 6: Haven-labelled data
+
+```{r}
+library(haven)
+gss <- data.frame(
+  trust = labelled(
+    c(1, 1, 2, 2, 1, 3, 1, 2, 2, 1),
+    c("Can trust" = 1, "Can't be too careful" = 2, "Depends" = 3),
+    label = "Can people be trusted"
+  ),
+  happy = labelled(
+    c(1, 2, 3, 1, 2, 2, 3, 1, 1, 2),
+    c("Very happy" = 1, "Pretty happy" = 2, "Not too happy" = 3),
+    label = "General happiness"
+  ),
+  age = labelled(
+    c(35, 42, 28, 55, 61, 33, 47, 29, 38, 50),
+    label = "Age of respondent"
+  )
+)
+tula(gss, codebook = TRUE)
+```
+
+## Test 7: Logical variable
+
+```{r}
+df_log <- data.frame(
+  is_auto = mtcars$am == 1,
+  mpg = mtcars$mpg
+)
+tula(df_log, codebook = TRUE)
+```
+
+## Test 8: Mixed data frame
+
+```{r}
+df_mix <- data.frame(
+  name = c("Alice", "Bob", "Charlie", "Diana", "Eve"),
+  score = c(85.5, 92.3, 78.1, 95.7, 88.2),
+  grade = factor(c("B", "A", "C", "A", "B"), levels = c("A", "B", "C")),
+  passed = c(TRUE, TRUE, FALSE, TRUE, TRUE),
+  stringsAsFactors = FALSE
+)
+tula(df_mix, codebook = TRUE)
+```
+
+## Test 9: Column with NAs
+
+```{r}
+df_na <- data.frame(
+  x = c(1, 2, 3, NA, 5, NA, 7, 8, 9, 10),
+  y = c("a", "b", NA, "d", "e", NA, "g", "h", "i", "j"),
+  stringsAsFactors = FALSE
+)
+tula(df_na, codebook = TRUE)
+```
+
+## Test 10: Width parameter
+
+```{r}
+tula(mtcars[, 1:3], codebook = TRUE, width = 60)
+```
+
+## Test 11: Ordered factor
+
+```{r}
+df_ord <- data.frame(
+  satisfaction = ordered(c("Low", "Medium", "High", "Medium", "High",
+                           "Low", "High", "Medium", "Low", "High"),
+                         levels = c("Low", "Medium", "High"))
+)
+tula(df_ord, codebook = TRUE)
+```
+
+## Test 12: Ordered factor with many levels (truncation)
+
+Ordered factors with more than 9 levels should show the first 8, then `...`,
+then the highest level. Unordered factors should never truncate.
+
+```{r}
+# Ordered with 15 levels → should truncate
+lvls <- c("Strongly disagree", "Disagree", "Slightly disagree",
+          "Neutral minus", "Neutral", "Neutral plus",
+          "Slightly agree", "Agree", "Mostly agree",
+          "Strongly agree", "Very strongly agree",
+          "Completely agree", "Totally agree",
+          "Absolutely agree", "Cannot agree more")
+df_many <- data.frame(
+  agreement = ordered(sample(lvls, 60, replace = TRUE), levels = lvls)
+)
+tula(df_many, codebook = TRUE)
+```
+
+```{r}
+# Unordered with 12 levels → should NOT truncate
+df_unord <- data.frame(
+  color = factor(sample(paste0("Color_", 1:12), 50, replace = TRUE))
+)
+tula(df_unord, codebook = TRUE)
+```
+
+## Test 13: Existing tula() summarize still works
+
+```{r}
+tula(mtcars)
+```

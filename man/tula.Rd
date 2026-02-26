@@ -33,6 +33,7 @@ tula(
   robust = FALSE,
   vcov = NULL,
   cluster = NULL,
+  codebook = FALSE,
   ...
 )
 
@@ -48,6 +49,7 @@ tula(
   digits = 7L,
   exp = FALSE,
   level = 95,
+  codebook = FALSE,
   ...
 )
 
@@ -62,6 +64,7 @@ tula(
   median = FALSE,
   digits = 7L,
   exp = FALSE,
+  codebook = FALSE,
   ...
 )
 
@@ -268,6 +271,11 @@ the variance-covariance matrix. Default \code{NULL}.}
 
 \item{cluster}{Character. Variable name for cluster-robust standard errors.
 Implies \code{robust = TRUE}. Default \code{NULL}.}
+
+\item{codebook}{Logical. For data frames and vectors: if \code{TRUE}, produces
+Stata-inspired codebook output (per-variable blocks with type, range,
+unique values, and tabulations or percentile distributions) instead of
+the default summary table. Default \code{FALSE}. Ignored for regression output.}
 
 \item{...}{Additional arguments passed to model-specific methods.}
 }

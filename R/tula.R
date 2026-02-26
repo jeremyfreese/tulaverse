@@ -70,6 +70,10 @@
 #'   the variance-covariance matrix. Default `NULL`.
 #' @param cluster Character. Variable name for cluster-robust standard errors.
 #'   Implies `robust = TRUE`. Default `NULL`.
+#' @param codebook Logical. For data frames and vectors: if `TRUE`, produces
+#'   Stata-inspired codebook output (per-variable blocks with type, range,
+#'   unique values, and tabulations or percentile distributions) instead of
+#'   the default summary table. Default `FALSE`. Ignored for regression output.
 #' @param ... Additional arguments passed to model-specific methods.
 #'
 #' @return For regression models, invisibly returns a `tula_output` object.
@@ -92,7 +96,8 @@
 tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
                  digits = 7L, exp = FALSE, level = 95, parallel = FALSE,
-                 robust = FALSE, vcov = NULL, cluster = NULL, ...) {
+                 robust = FALSE, vcov = NULL, cluster = NULL,
+                 codebook = FALSE, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -103,10 +108,11 @@ tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 #' @export
 tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                          width = NULL, sep = 5L, mad = FALSE, median = FALSE,
-                         digits = 7L, exp = FALSE, level = 95, ...) {
+                         digits = 7L, exp = FALSE, level = 95,
+                         codebook = FALSE, ...) {
   # Atomic vectors (numeric, integer, logical, character, factor) are routed
-  # to the summarize path.  Matrices and other dimensioned objects are not
-  # supported.
+  # to the summarize path (or codebook path when codebook = TRUE).
+  # Matrices and other dimensioned objects are not supported.
   if (is.atomic(model) && is.null(dim(model))) {
     # Recover the expression the user typed for `model` from the generic's
     # call frame (UseMethod passes the generic's environment to the method).
@@ -120,6 +126,9 @@ tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     # Preserve factor class through as.data.frame
     df <- as.data.frame(df, stringsAsFactors = FALSE)
     if (is.factor(model)) df[[nm]] <- model
+    if (isTRUE(codebook)) {
+      return(.tula_codebook(df, width = width))
+    }
     return(.tula_summarize(df, width = width, sep = sep,
                            mad = mad, median = median, digits = digits))
   }
@@ -135,7 +144,11 @@ tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 #' @export
 tula.data.frame <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                              width = NULL, sep = 5L, mad = FALSE,
-                             median = FALSE, digits = 7L, exp = FALSE, ...) {
+                             median = FALSE, digits = 7L, exp = FALSE,
+                             codebook = FALSE, ...) {
+  if (isTRUE(codebook)) {
+    return(.tula_codebook(model, width = width))
+  }
   .tula_summarize(model, width = width, sep = sep, mad = mad, median = median,
                   digits = digits)
 }

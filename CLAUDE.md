@@ -26,7 +26,8 @@ distinct input types:
   `rq`, `rqs`, `coxph`, and future model types): coefficient table with header
   block (fit statistics).
 - **Data frames / vectors** (the "summarize path"): Stata `-summarize`-style
-  descriptive statistics table.
+  descriptive statistics table. With `codebook = TRUE`, produces Stata
+  `-codebook-`-style per-variable blocks instead.
 
 `tulatab()` is a standalone exported function (not dispatched through `tula()`)
 that produces Stata-style one-way frequency tables (the "tabulate path").
@@ -51,6 +52,7 @@ that produces Stata-style one-way frequency tables (the "tabulate path").
 | `R/header.R` | `format_header()`, `compute_total_width()` |
 | `R/format_helpers.R` | `fmt_num()`, `fmt_pval()`, `fmt_header_val()`, `pad_left/right()`, `char_rep()` |
 | `R/tula_summarize.R` | `.tula_summarize()`, `print.tula_summary()`, `format_summary_table()`, `.fmt_sum()`, `.fmt_obs()` |
+| `R/tula_codebook.R` | `.tula_codebook()`, `new_tula_codebook()`, `print.tula_codebook()`, `.build_codebook_entry()`, `.compute_units()`, `.build_codebook_tab()`, `.format_codebook_entry()` |
 | `R/robust.R` | `.resolve_robust_vcov()`, `.recompute_ct_robust()`, `.robust_ci()` |
 | `R/tulatab.R` | `tulatab()`, `new_tula_tab()`, `print.tula_tab()`, `new_tula_crosstab()`, `print.tula_crosstab()`, `new_tula_crosstab_by()`, `print.tula_crosstab_by()`, `.extract_var_name()` |
 | `R/tab_helpers.R` | `.build_tab_df()`, `.detect_var_type()`, `.tab_factor()`, `.tab_character()`, `.tab_numeric()`, `.tab_haven()`, `.haven_display_value()`, `.fmt_freq()`, `.fmt_pct()`, `.format_tab_table()`, `.format_tab_mean_table()`, `.compute_oneway_means()`, `.truncate_tab_label()` |
@@ -532,6 +534,118 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 
 ---
 
+## Codebook path architecture (`codebook = TRUE`)
+
+Called when `tula()` receives a data frame, tibble, or atomic vector with
+`codebook = TRUE`. Produces Stata-inspired `-codebook-` output: a per-variable
+block showing type, range, unique values, missing counts, and either a
+tabulation or summary statistics with percentiles.
+
+### Entry point
+
+```r
+tula(df, codebook = TRUE)         # data frame
+tula(mtcars$mpg, codebook = TRUE) # single vector
+```
+
+The `codebook` parameter is added to `tula()`, `tula.data.frame()`, and
+`tula.default()`. When `TRUE`, the call is intercepted before the normal
+summarize path and diverted to `.tula_codebook()`.
+
+### Pipeline
+
+```
+tula.data.frame / tula.default (codebook = TRUE)
+  └─► .tula_codebook(df, width)
+        ├─ .build_codebook_entry() per column → list of entry lists
+        └─ returns tula_codebook S3 object → print.tula_codebook()
+              └─► .format_codebook_entry(entry, width) per variable
+```
+
+### Display mode decision
+
+| Condition | Mode |
+|-----------|------|
+| Character | `"string"` (show examples) |
+| Factor / ordered factor | `"tabulation"` (Freq. + Level) |
+| Haven-labelled with value labels | `"tabulation"` (Freq. + Numeric + Label) |
+| Numeric/integer/logical with ≤ 9 unique values | `"tabulation"` (Freq. + Value) |
+| Numeric/integer with > 9 unique values | `"continuous"` (Mean, SD, percentiles) |
+
+### Type description strings
+
+| R type | `type_desc` |
+|--------|-------------|
+| `integer` | `"Numeric (int)"` |
+| `double` | `"Numeric (float)"` |
+| Haven (integer storage) | `"Numeric (int)"` |
+| Haven (double storage) | `"Numeric (float)"` |
+| `character` | `"String (strN)"` where N = max nchar |
+| `factor` | `"Factor"` |
+| `ordered` | `"Ordered factor"` |
+| `logical` | `"Boolean"` |
+
+### Units field
+
+Only shown when **all non-NA values are integer-like** (i.e., equal their
+rounded value). When shown, computed as the GCD of all pairwise differences
+between sorted unique values via `.compute_units()`.
+
+### Tabulation column layout
+
+The tabulation columns vary by variable type:
+
+| Variable type | Columns shown |
+|---------------|---------------|
+| Factor / ordered factor | `Freq.  Level` |
+| Haven-labelled with value labels | `Freq.  Numeric  Label` |
+| Numeric with ≤ 9 unique values | `Freq.  Value` |
+
+### S3 object: `tula_codebook`
+
+```r
+list(
+  entries = list(     # one per variable
+    list(
+      var_name, var_label, var_type, type_desc,
+      is_haven, has_val_labels,
+      n_total, n_missing, n_unique,
+      range_min, range_max, units,
+      display_mode,       # "continuous", "tabulation", or "string"
+      mean_val, sd_val, pctiles,   # continuous mode
+      tab_df,                       # tabulation mode
+      examples                      # string mode
+    ), ...
+  ),
+  width = NULL
+)
+```
+
+### Key functions in `R/tula_codebook.R`
+
+| Function | Purpose |
+|----------|---------|
+| `.tula_codebook(df, width)` | Entry point; loops over columns, builds entries |
+| `.build_codebook_entry(col, varname)` | Builds one entry list per variable |
+| `.compute_units(x)` | GCD of differences between sorted unique values |
+| `.build_codebook_tab(col, ...)` | Builds tabulation data frame for a variable |
+| `new_tula_codebook(entries, width)` | S3 constructor |
+| `print.tula_codebook(x, ...)` | Print method; loops over entries |
+| `.format_codebook_entry(entry, width)` | Renders one variable's block as lines |
+| `.cb_format_factor_tab(tab_df, kv_w)` | Factor tabulation formatter |
+| `.cb_format_haven_tab(tab_df, kv_w)` | Haven tabulation formatter |
+| `.cb_format_numeric_tab(tab_df, kv_w)` | Numeric tabulation formatter |
+| `.cb_kv(key, value, kv_w)` | Format `"         Key: value"` line |
+| `.cb_kv_pair(k1, v1, k2, v2, kv_w, w)` | Two-column key-value line |
+| `.cb_fmt_num(x)` | Format numbers for codebook display |
+
+### Reused existing functions (no modifications needed)
+
+- `.BOX_H` from `R/format_helpers.R`
+- `pad_left()`, `pad_right()`, `char_rep()` from `R/format_helpers.R`
+
+---
+
 ## Key options and their defaults
 
 | Option | Default | Path | Effect |
@@ -545,6 +659,7 @@ Since `sd_val` and `max_val` are meaningless for factor levels, they store:
 | `robust` | FALSE | regression | HC3 heteroskedasticity-robust SEs; requires `sandwich` |
 | `vcov` | NULL | regression | HC type override (character, e.g. `"HC4"`) or pre-computed vcov matrix |
 | `cluster` | NULL | regression | Cluster-robust SEs; character variable name; implies `robust = TRUE` |
+| `codebook` | FALSE | summarize | Show Stata-style codebook instead of summarize table |
 | `width` | NULL (→ `getOption("width")`) | both | Total output width |
 | `sep` | 5L | summarize | Variables between separator lines |
 | `mad` | FALSE | summarize | Show MAD instead of SD |
