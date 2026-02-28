@@ -554,11 +554,14 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #' @param se_label Character or NULL. When non-NULL, overrides the SE column
 #'   header (e.g. `"Robust SE"`). Takes precedence over `"DMSE"` when both
 #'   `se_label` and `exp` are active.
+#' @param se_super Character or NULL. When non-NULL, an extra line is inserted
+#'   between the opening separator and the column headers, with this text
+#'   right-aligned above the SE column (e.g. `"Linearized"` for survey models).
 #'
 #' @return Character vector, one element per line.
 format_coef_table <- function(coef_df, stat_label, wide, total_width,
                               exp = FALSE, exp_label = NULL, level = 95,
-                              se_label = NULL) {
+                              se_label = NULL, se_super = NULL) {
   # Fixed numeric column widths.
   # stat is 10 (was 8) so values like "-5.08e+06" don't overflow.
   # pval is 9 (was 8) for a little more breathing room around "P>|z|".
@@ -615,7 +618,20 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
     )
   }
 
-  lines <- c(sep, hdr, sep)
+  # Optional super-label line: a label (e.g. "Linearized") right-aligned
+  # above the SE column header.  Inserted between the opening separator and
+  # the column-header line.  Used for survey models (Stata convention).
+  if (!is.null(se_super)) {
+    # The SE column ends at position: lbl_w + 2 (for " |") + cw_coef + 1 + cw_se
+    se_end_pos  <- lbl_w + 2L + cw_coef + 1L + cw_se
+    super_line  <- pad_left(se_super, se_end_pos)
+    # Pad to total_width so the line is the same length as the others
+    if (nchar(super_line) < total_width)
+      super_line <- paste0(super_line, strrep(" ", total_width - nchar(super_line)))
+    lines <- c(sep, super_line, hdr, sep)
+  } else {
+    lines <- c(sep, hdr, sep)
+  }
 
   cutpoint_sep_done <- FALSE
 

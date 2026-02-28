@@ -188,7 +188,8 @@ new_tula_output <- function(model_type,
                             ancillary_df   = NULL,
                             level          = 95,
                             outcome_levels = NULL,
-                            se_label       = NULL) {
+                            se_label       = NULL,
+                            se_super       = NULL) {
   structure(
     list(
       model_type     = model_type,
@@ -206,7 +207,8 @@ new_tula_output <- function(model_type,
       ancillary_df   = ancillary_df,
       level          = level,
       outcome_levels = outcome_levels,
-      se_label       = se_label
+      se_label       = se_label,
+      se_super       = se_super
     ),
     class = "tula_output"
   )
@@ -470,18 +472,22 @@ print.tula_output <- function(x, ...) {
                                    exp       = isTRUE(x$exp),
                                    exp_label = x$exp_label,
                                    level     = lv,
-                                   se_label  = x$se_label)
+                                   se_label  = x$se_label,
+                                   se_super  = x$se_super)
 
   # Embed the dependent variable name in the label-column area of the column
-  # header row (table_lines[2]), mirroring the multinom outcome-label pattern.
+  # header row.  When se_super is non-NULL, format_coef_table() inserts an
+  # extra line between the first separator and the column headers, shifting
+  # the header row from index 2 to index 3.
   if (!is.null(x$dep_var) && nchar(x$dep_var) > 0L) {
     num_cols_w <- 2L + 10L + 1L + 10L + 1L + 10L + 1L + 9L
     if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
     lbl_w   <- total_width - num_cols_w
     dep_lbl <- .truncate_label(x$dep_var, lbl_w)
-    hdr_line        <- table_lines[2L]
-    table_lines[2L] <- paste0(pad_right(dep_lbl, lbl_w),
-                              substring(hdr_line, lbl_w + 1L))
+    hdr_idx <- if (!is.null(x$se_super)) 3L else 2L
+    hdr_line            <- table_lines[hdr_idx]
+    table_lines[hdr_idx] <- paste0(pad_right(dep_lbl, lbl_w),
+                                   substring(hdr_line, lbl_w + 1L))
   }
 
   # Splice ancillary parameter rows (if any) before the final separator.
