@@ -136,7 +136,7 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
-  new_tula_output(
+  out <- new_tula_output(
     model_type     = "polr",
     header_left    = header_left,
     header_right   = header_right,
@@ -152,4 +152,5 @@ tula.polr <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     outcome_levels = model$lev,
     se_label       = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
+  .attach_select(out, ...)
 }

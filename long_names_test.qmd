@@ -29,7 +29,8 @@ full natural width), and where useful at a custom intermediate width.
 
 Variable names of increasing length, all numeric (no factor grouping).
 
-```{r long-numeric}
+```{r}
+#| echo: false
 df <- mtcars
 df$displacement_cubic_inches  <- mtcars$disp
 df$horsepower_net              <- mtcars$hp
@@ -39,13 +40,29 @@ df$weight_in_thousands_of_lbs  <- mtcars$wt
 m <- lm(mpg ~ displacement_cubic_inches + horsepower_net +
                rear_axle_ratio + weight_in_thousands_of_lbs,
         data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf):\n")
+```
+
+Narrow (width = Inf):
+
+```{r}
 tula(m, width = Inf)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -56,18 +73,35 @@ tula(m, wide = TRUE, width = Inf)
 The factor variable itself has a long name; the individual levels are short
 (numeric strings).
 
-```{r long-factor-name}
+```{r}
+#| echo: false
 df <- mtcars
 df$number_of_cylinders <- factor(mtcars$cyl)
 
 m <- lm(mpg ~ number_of_cylinders + wt, data = df)
-cat("Narrow:\n")
+```
+
+Narrow:
+
+```{r}
 tula(m)
-cat("\nNarrow, ref = TRUE:\n")
+```
+
+Narrow, ref = TRUE:
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide, ref = TRUE:\n")
+```
+
+Wide, ref = TRUE:
+
+```{r}
 tula(m, ref = TRUE, wide = TRUE)
 ```
 
@@ -77,7 +111,8 @@ tula(m, ref = TRUE, wide = TRUE)
 
 The factor variable name is short; the level labels themselves are long strings.
 
-```{r long-level-names}
+```{r}
+#| echo: false
 df <- data.frame(
   y   = c(2.1, 3.4, 1.9, 4.2, 3.1, 2.8, 3.9, 2.3, 4.1, 3.7,
            2.5, 3.2, 1.8, 4.0, 3.3, 2.6, 3.8, 2.2, 4.3, 3.5),
@@ -91,15 +126,35 @@ df <- data.frame(
 )
 
 m <- lm(y ~ grp + x, data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf):\n")
+```
+
+Narrow (width = Inf):
+
+```{r}
 tula(m, width = Inf)
-cat("\nNarrow, ref = TRUE (default width = 79):\n")
+```
+
+Narrow, ref = TRUE (default width = 79):
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -109,7 +164,8 @@ tula(m, wide = TRUE, width = Inf)
 
 Both the variable name and the level labels are long.
 
-```{r long-both}
+```{r}
+#| echo: false
 df <- data.frame(
   outcome              = c(2.1, 3.4, 1.9, 4.2, 3.1, 2.8, 3.9, 2.3, 4.1, 3.7,
                            2.5, 3.2, 1.8, 4.0, 3.3, 2.6, 3.8, 2.2, 4.3, 3.5),
@@ -123,17 +179,41 @@ df <- data.frame(
 )
 
 m <- lm(outcome ~ experimental_condition + baseline_score, data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf):\n")
+```
+
+Narrow (width = Inf):
+
+```{r}
 tula(m, width = Inf)
-cat("\nNarrow, ref = TRUE (default width = 79):\n")
+```
+
+Narrow, ref = TRUE (default width = 79):
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nNarrow, ref = TRUE (width = Inf):\n")
+```
+
+Narrow, ref = TRUE (width = Inf):
+
+```{r}
 tula(m, ref = TRUE, width = Inf)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -143,7 +223,8 @@ tula(m, wide = TRUE, width = Inf)
 
 One predictor name that is extremely long on its own.
 
-```{r very-long-single}
+```{r}
+#| echo: false
 df <- mtcars
 df$self_reported_fuel_efficiency_miles_per_gallon_city_cycle <- mtcars$mpg + rnorm(32, 0, 0.5)
 df$vehicle_curb_weight_measured_in_thousands_of_pounds       <- mtcars$wt
@@ -151,13 +232,29 @@ df$vehicle_curb_weight_measured_in_thousands_of_pounds       <- mtcars$wt
 m <- lm(mpg ~ self_reported_fuel_efficiency_miles_per_gallon_city_cycle +
                vehicle_curb_weight_measured_in_thousands_of_pounds,
         data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf):\n")
+```
+
+Narrow (width = Inf):
+
+```{r}
 tula(m, width = Inf)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -168,7 +265,8 @@ tula(m, wide = TRUE, width = Inf)
 Tests whether label-stripping of `factor()` wrapper still displays correctly
 when the inner variable name is itself long.
 
-```{r long-inline-factor}
+```{r}
+#| echo: false
 df <- mtcars
 df$transmission_type_coded <- mtcars$am
 df$number_of_forward_gears <- mtcars$gear
@@ -176,11 +274,23 @@ df$number_of_forward_gears <- mtcars$gear
 m <- lm(mpg ~ factor(transmission_type_coded) +
                factor(number_of_forward_gears) + wt,
         data = df)
-cat("Narrow:\n")
+```
+
+Narrow:
+
+```{r}
 tula(m)
-cat("\nNarrow, ref = TRUE:\n")
+```
+
+Narrow, ref = TRUE:
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m, wide = TRUE)
 ```
 
@@ -190,7 +300,8 @@ tula(m, wide = TRUE)
 
 Realistic scenario with a mixture of name lengths.
 
-```{r mixed-lengths}
+```{r}
+#| echo: false
 df <- data.frame(
   y               = rnorm(120, 50, 10),
   age             = sample(18:65, 120, replace = TRUE),
@@ -205,15 +316,35 @@ df <- data.frame(
 
 m <- lm(y ~ age + years_of_formal_education_completed + employment_status,
         data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf):\n")
+```
+
+Narrow (width = Inf):
+
+```{r}
 tula(m, width = Inf)
-cat("\nNarrow, ref = TRUE (default width = 79):\n")
+```
+
+Narrow, ref = TRUE (default width = 79):
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -224,7 +355,8 @@ tula(m, wide = TRUE, width = Inf)
 A single factor whose one level name is so long it may exceed the label column.
 This tests whether/how truncation (the `~` suffix) kicks in.
 
-```{r truncation-check}
+```{r}
+#| echo: false
 df <- data.frame(
   y   = rnorm(30),
   grp = factor(rep(c(
@@ -236,15 +368,35 @@ df <- data.frame(
 )
 
 m <- lm(y ~ grp + x, data = df)
-cat("Narrow (default width = 79):\n")
+```
+
+Narrow (default width = 79):
+
+```{r}
 tula(m)
-cat("\nNarrow (width = Inf — no truncation):\n")
+```
+
+Narrow (width = Inf -- no truncation):
+
+```{r}
 tula(m, width = Inf)
-cat("\nNarrow, ref = TRUE (default width = 79):\n")
+```
+
+Narrow, ref = TRUE (default width = 79):
+
+```{r}
 tula(m, ref = TRUE)
-cat("\nWide (default width = 79):\n")
+```
+
+Wide (default width = 79):
+
+```{r}
 tula(m, wide = TRUE)
-cat("\nWide (width = Inf):\n")
+```
+
+Wide (width = Inf):
+
+```{r}
 tula(m, wide = TRUE, width = Inf)
 ```
 
@@ -255,7 +407,8 @@ tula(m, wide = TRUE, width = Inf)
 Shows the effect of varying `width` on a model with moderately long names.
 Useful for calibrating what width feels right.
 
-```{r width-sweep}
+```{r}
+#| echo: false
 set.seed(1)
 df9 <- data.frame(
   y               = rnorm(120, 50, 10),
@@ -270,16 +423,35 @@ df9 <- data.frame(
 )
 m9 <- lm(y ~ age + years_of_formal_education_completed + employment_status,
          data = df9)
+```
 
-cat("width = 60:\n")
+width = 60:
+
+```{r}
 tula(m9, width = 60)
-cat("\nwidth = 72:\n")
+```
+
+width = 72:
+
+```{r}
 tula(m9, width = 72)
-cat("\nwidth = 79 (default):\n")
+```
+
+width = 79 (default):
+
+```{r}
 tula(m9)
-cat("\nwidth = 100:\n")
+```
+
+width = 100:
+
+```{r}
 tula(m9, width = 100)
-cat("\nwidth = Inf (full natural width):\n")
+```
+
+width = Inf (full natural width):
+
+```{r}
 tula(m9, width = Inf)
 ```
 
@@ -290,14 +462,27 @@ tula(m9, width = Inf)
 Wide mode needs more horizontal space for CI columns, so the label column is
 squeezed more aggressively at the same `width`.
 
-```{r width-wide}
-cat("wide = TRUE, width = 79 (default):\n")
+wide = TRUE, width = 79 (default):
+
+```{r}
 tula(m9, wide = TRUE)
-cat("\nwide = TRUE, width = 100:\n")
+```
+
+wide = TRUE, width = 100:
+
+```{r}
 tula(m9, wide = TRUE, width = 100)
-cat("\nwide = TRUE, width = 120:\n")
+```
+
+wide = TRUE, width = 120:
+
+```{r}
 tula(m9, wide = TRUE, width = 120)
-cat("\nwide = TRUE, width = Inf:\n")
+```
+
+wide = TRUE, width = Inf:
+
+```{r}
 tula(m9, wide = TRUE, width = Inf)
 ```
 
@@ -309,13 +494,25 @@ When `width` is set smaller than the space needed for the numeric columns
 alone, the label column shrinks toward 1 character and everything gets
 truncated to `~`.
 
-```{r width-tiny}
+```{r}
+#| echo: false
 m11 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+```
 
-cat("width = 79 (default):\n")
+width = 79 (default):
+
+```{r}
 tula(m11)
-cat("\nwidth = 50:\n")
+```
+
+width = 50:
+
+```{r}
 tula(m11, width = 50)
-cat("\nwidth = 42 (near the minimum for narrow mode):\n")
+```
+
+width = 42 (near the minimum for narrow mode):
+
+```{r}
 tula(m11, width = 42)
 ```

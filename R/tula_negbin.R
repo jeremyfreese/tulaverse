@@ -91,7 +91,7 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   coef_df <- build_coef_df(model, ct, ci, wide, ref = opts$ref, label = opts$label)
 
   # --- Output ---------------------------------------------------------------
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "negbin",
     header_left  = header_left,
     header_right = header_right,
@@ -107,4 +107,5 @@ tula.negbin <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     level        = level,
     se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
+  .attach_select(out, ...)
 }

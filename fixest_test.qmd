@@ -11,93 +11,163 @@ library(fixest)
 ## Test 1: Basic feols (no FE)
 
 ```{r}
+#| echo: false
 m1 <- feols(mpg ~ wt + hp, data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m1)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m1)
 ```
 
 ## Test 2: feols with fixed effects
 
 ```{r}
+#| echo: false
 m2 <- feols(mpg ~ wt + hp | cyl, data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m2)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m2)
 ```
 
 ## Test 3: feols with multiple FEs
 
 ```{r}
+#| echo: false
 m3 <- feols(mpg ~ wt | cyl + gear, data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m3)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m3)
 ```
 
 ## Test 4: feols with i() factor interaction
 
 ```{r}
+#| echo: false
 m4 <- feols(mpg ~ wt + i(cyl, ref = 4), data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m4)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m4)
 ```
 
 ## Test 5: feols with factor()
 
 ```{r}
+#| echo: false
 m5 <- feols(mpg ~ wt + factor(cyl), data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m5)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m5)
 ```
 
 ## Test 6: Wide output with CIs
 
+summary():
+
 ```{r}
-cat("--- summary() ---\n")
 summary(m2)
-cat("\n--- tula(wide = TRUE) ---\n")
+```
+
+tula(wide = TRUE):
+
+```{r}
 tula(m2, wide = TRUE)
 ```
 
 ## Test 7: Robust SEs
 
+summary(vcov = 'hetero'):
+
 ```{r}
-cat("--- summary(vcov = 'hetero') ---\n")
 summary(m2, vcov = "hetero")
-cat("\n--- tula(robust = TRUE) ---\n")
+```
+
+tula(robust = TRUE):
+
+```{r}
 tula(m2, robust = TRUE)
 ```
 
 ## Test 8: Cluster SEs
 
+summary(cluster = ~gear):
+
 ```{r}
-cat("--- summary(cluster = ~gear) ---\n")
 summary(m2, cluster = ~gear)
-cat("\n--- tula(cluster = 'gear') ---\n")
+```
+
+tula(cluster = 'gear'):
+
+```{r}
 tula(m2, cluster = "gear")
 ```
 
 ## Test 9: feglm (logit)
 
 ```{r}
+#| echo: false
 m6 <- feglm(am ~ wt + hp | cyl, data = mtcars, family = binomial)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m6)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m6)
 ```
 
 ## Test 10: fepois
 
 ```{r}
+#| echo: false
 set.seed(42)
 count_data <- data.frame(
   y = rpois(200, lambda = 3),
@@ -106,47 +176,83 @@ count_data <- data.frame(
   g = sample(1:10, 200, replace = TRUE)
 )
 m7 <- fepois(y ~ x1 + x2 | g, data = count_data)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m7)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m7)
 ```
 
 ## Test 11: fenegbin
 
 ```{r}
+#| echo: false
 m8 <- fenegbin(y ~ x1 + x2 | g, data = count_data)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m8)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m8)
 ```
 
 ## Test 12: exp = TRUE with fepois
 
+summary():
+
 ```{r}
-cat("--- summary() ---\n")
 summary(m7)
-cat("\n--- tula(exp = TRUE) ---\n")
+```
+
+tula(exp = TRUE):
+
+```{r}
 tula(m7, exp = TRUE)
 ```
 
 ## Test 13: Existing tula(lm) still works
 
 ```{r}
+#| echo: false
 m_lm <- lm(mpg ~ wt, data = mtcars)
-cat("--- summary() ---\n")
+```
+
+summary():
+
+```{r}
 summary(m_lm)
-cat("\n--- tula() ---\n")
+```
+
+tula():
+
+```{r}
 tula(m_lm)
 ```
 
 ## Test 14: ref = TRUE with i()
 
+summary():
+
 ```{r}
-cat("--- summary() ---\n")
 summary(m4)
-cat("\n--- tula(ref = TRUE) ---\n")
+```
+
+tula(ref = TRUE):
+
+```{r}
 tula(m4, ref = TRUE)
 ```
 

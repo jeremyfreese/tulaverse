@@ -120,10 +120,19 @@ tula(m8, width = 68)
 NB and Poisson on the same data. The NB model has an ancillary section; the
 Poisson does not.
 
+Negative binomial:
+
 ```{r test9}
-cat("Negative binomial:\n")
 tula(m1)
-cat("\nPoisson:\n")
+```
+
+```{r}
+#| echo: false
 m_pois <- glm(carb ~ wt + hp, data = mtcars, family = poisson)
+```
+
+Poisson:
+
+```{r}
 tula(m_pois)
 ```

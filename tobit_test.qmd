@@ -14,34 +14,47 @@ data(Affairs, package = "AER")
 
 Matches the user's Stata example: `tobit affairs age yearsmarried religiousness rating, ll(0)`
 
-```{r test1}
+```{r}
+#| echo: false
 m1 <- tobit(affairs ~ age + yearsmarried + religiousness + rating, data = Affairs)
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m1)
 ```
 
-```{r test1-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m1)
 ```
 
 ## Test 2 — Factor variable
 
-```{r test2}
+```{r}
+#| echo: false
 m2 <- tobit(affairs ~ factor(children) + age + yearsmarried, data = Affairs)
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m2)
 ```
 
-```{r test2-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m2)
 ```
 
 ## Test 3 — wide = FALSE (narrow output)
 
-```{r test3}
-cat("--- tula(wide = FALSE) ---\n")
+`tula(wide = FALSE)`:
+
+```{r}
 tula(m1, wide = FALSE)
 ```
 
@@ -49,8 +62,9 @@ tula(m1, wide = FALSE)
 
 Uses sandwich::sandwich() fallback since vcovHC() does not support survreg.
 
-```{r test4}
-cat("--- tula(robust = TRUE) ---\n")
+`tula(robust = TRUE)`:
+
+```{r}
 tula(m1, robust = TRUE)
 ```
 
@@ -58,8 +72,9 @@ tula(m1, robust = TRUE)
 
 Shows reference level for factor variable.
 
-```{r test5}
-cat("--- tula(ref = TRUE) ---\n")
+`tula(ref = TRUE)`:
+
+```{r}
 tula(m2, ref = TRUE)
 ```
 
@@ -67,8 +82,9 @@ tula(m2, ref = TRUE)
 
 Exponentiated coefficients (less common for tobit, but should work).
 
-```{r test6}
-cat("--- tula(exp = TRUE) ---\n")
+`tula(exp = TRUE)`:
+
+```{r}
 tula(m1, exp = TRUE)
 ```
 
@@ -76,15 +92,21 @@ tula(m1, exp = TRUE)
 
 Tests the non-tobit code path with a different distribution.
 
-```{r test7}
+```{r}
+#| echo: false
 m_sv <- survreg(Surv(futime, fustat) ~ ecog.ps + rx + age,
                 data = ovarian, dist = "weibull")
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m_sv)
 ```
 
-```{r test7-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m_sv)
 ```
 
@@ -92,24 +114,35 @@ tula(m_sv)
 
 Exponential has a fixed scale = 1, so no `/sigma` ancillary row should appear.
 
-```{r test8}
+```{r}
+#| echo: false
 m_exp <- survreg(Surv(futime, fustat) ~ ecog.ps + rx + age,
                  data = ovarian, dist = "exponential")
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m_exp)
 ```
 
-```{r test8-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m_exp)
 ```
 
 ## Test 9 — Right-censored tobit
 
-```{r test9}
+```{r}
+#| echo: false
 m_right <- tobit(affairs ~ age + yearsmarried + religiousness + rating,
                  data = Affairs, left = -Inf, right = 12)
-cat("--- tula() ---\n")
+```
+
+`tula()`:
+
+```{r}
 tula(m_right)
 ```
 
@@ -117,10 +150,15 @@ tula(m_right)
 
 Shows Uncensored, Left-censored, and Right-censored counts in header.
 
-```{r test10}
+```{r}
+#| echo: false
 m_both <- tobit(affairs ~ age + yearsmarried + religiousness + rating,
                 data = Affairs, left = 0, right = 12)
-cat("--- tula() ---\n")
+```
+
+`tula()`:
+
+```{r}
 tula(m_both)
 ```
 
@@ -129,7 +167,8 @@ tula(m_both)
 Left-censored at 0 (affairs reported as 0) and interval-censored for positive
 values (reported in a band). Uses `survreg` directly with `dist = "gaussian"`.
 
-```{r test11}
+```{r}
+#| echo: false
 d <- Affairs
 d$lo <- ifelse(d$affairs == 0, -Inf, d$affairs - 0.5)
 d$hi <- ifelse(d$affairs == 0, 0, d$affairs + 0.5)
@@ -137,12 +176,17 @@ d$hi <- ifelse(d$affairs == 0, 0, d$affairs + 0.5)
 m_int <- survreg(Surv(lo, hi, type = "interval2") ~ age + yearsmarried +
                    religiousness + rating,
                  data = d, dist = "gaussian")
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m_int)
 ```
 
-```{r test11-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m_int)
 ```
 
@@ -151,7 +195,8 @@ tula(m_int)
 Every observation is interval-censored (observed in a unit-width band around
 the true value). No left- or right-censored observations.
 
-```{r test12}
+```{r}
+#| echo: false
 set.seed(42)
 n <- 200
 x1 <- rnorm(n)
@@ -162,12 +207,17 @@ hi2 <- lo2 + 1
 
 m_int2 <- survreg(Surv(lo2, hi2, type = "interval2") ~ x1 + x2,
                   dist = "gaussian")
-cat("--- summary() ---\n")
+```
+
+`summary()`:
+
+```{r}
 summary(m_int2)
 ```
 
-```{r test12-tula}
-cat("--- tula() ---\n")
+`tula()`:
+
+```{r}
 tula(m_int2)
 ```
 
@@ -175,8 +225,13 @@ tula(m_int2)
 
 Backward compatibility check.
 
-```{r test13}
+```{r}
+#| echo: false
 m_lm <- lm(mpg ~ wt, data = mtcars)
-cat("--- tula(lm) ---\n")
+```
+
+`tula(lm)`:
+
+```{r}
 tula(m_lm)
 ```

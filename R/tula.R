@@ -100,7 +100,9 @@ tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
                  digits = 7L, exp = FALSE, level = 95, parallel = FALSE,
                  robust = FALSE, vcov = NULL, cluster = NULL,
-                 codebook = FALSE, ...) {
+                 codebook = FALSE,
+                 select = NULL, selectheader = FALSE,
+                 selectfooter = FALSE, ...) {
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -263,6 +265,66 @@ new_tula_output <- function(model_type,
 
 
 # ---------------------------------------------------------------------------
+# Select feature: show only selected coefficients from regression output.
+#
+# .attach_select() is called by each tula.*() method to store the select
+# parameters on the output object. The parameters flow from the generic's
+# formals through ... to each method.
+#
+# .assign_terms() maps each row in coef_df to its "term name" — factor
+# level rows are assigned to their group header's name. This allows
+# select = "cyl" to select the group header and all its level rows.
+#
+# .filter_select() returns the subset of coef_df matching the requested
+# term names.
+# ---------------------------------------------------------------------------
+.attach_select <- function(output, ...) {
+  dots <- list(...)
+  if (!is.null(dots[["select"]])) {
+    output$select       <- dots[["select"]]
+    output$selectheader <- isTRUE(dots[["selectheader"]])
+    output$selectfooter <- isTRUE(dots[["selectfooter"]])
+  }
+  output
+}
+
+.assign_terms <- function(coef_df) {
+  n <- nrow(coef_df)
+  term <- character(n)
+  current_factor <- NA_character_
+
+  for (i in seq_len(n)) {
+    row <- coef_df[i, ]
+    if (row$is_factor_header) {
+      current_factor <- trimws(row$label)
+      term[i] <- current_factor
+    } else if (row$is_intercept) {
+      current_factor <- NA_character_
+      term[i] <- "(Intercept)"
+    } else if (row$is_cutpoint) {
+      current_factor <- NA_character_
+      term[i] <- trimws(row$label)
+    } else if (!is.na(current_factor) && grepl("^\\s", row$label)) {
+      # Indented row following a factor header — belongs to that factor
+      term[i] <- current_factor
+    } else {
+      # Non-indented, non-special row — standalone term
+      current_factor <- NA_character_
+      term[i] <- trimws(row$label)
+    }
+  }
+  term
+}
+
+.filter_select <- function(coef_df, select) {
+  if (is.null(select)) return(coef_df)
+  terms <- .assign_terms(coef_df)
+  keep <- terms %in% select
+  coef_df[keep, , drop = FALSE]
+}
+
+
+# ---------------------------------------------------------------------------
 # Internal constructor for tula_multinom_output S3 objects.
 #
 # Fields:
@@ -326,8 +388,10 @@ print.tula_multinom_output <- function(x, ...) {
   max_w <- .resolve_width(x$width)
   vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
+  select_mode <- !is.null(x$select)
+
   # Compute total width from the shared header and the widest label across
-  # all outcome blocks.
+  # all outcome blocks.  Always use full coef_df for consistent layout.
   all_labels <- unlist(lapply(x$blocks, function(b) b$coef_df$label))
 
   natural_width <- compute_total_width(
@@ -362,50 +426,50 @@ print.tula_multinom_output <- function(x, ...) {
   if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
   lbl_w <- total_width - num_cols_w
 
+  # Filter blocks for select mode
+  blocks_show <- if (select_mode) {
+    lapply(x$blocks, function(b) {
+      b$coef_df <- .filter_select(b$coef_df, x$select)
+      b
+    })
+  } else {
+    x$blocks
+  }
+
   # Shared header (printed once above all outcome blocks / parallel table)
-  header_lines <- format_header(x$header_left, x$header_right,
-                                total_width = total_width,
-                                value_fmts  = vf)
-  cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+  if (!select_mode || isTRUE(x$selectheader)) {
+    header_lines <- format_header(x$header_left, x$header_right,
+                                  total_width = total_width,
+                                  value_fmts  = vf)
+    cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+  }
 
   if (isTRUE(x$parallel)) {
     # --- Parallel layout: all non-base outcomes as side-by-side columns -----
     # .format_parallel_multinom_table() raises an informative error if there
     # are too many outcome categories to fit within total_width.
     table_lines <- .format_parallel_multinom_table(
-      blocks      = x$blocks,
+      blocks      = blocks_show,
       dep_var     = x$dep_var,
       total_width = total_width,
       exp         = isTRUE(x$exp)
     )
     cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
-    cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+    if (!select_mode || isTRUE(x$selectfooter)) {
+      cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+    }
     cat("* p<0.05  ** p<0.01  *** p<0.001\n")
 
   } else {
     # --- Stacked layout: one coefficient block per non-base outcome ----------
-    # format_coef_table() returns: [sep, hdr, sep, ...rows..., sep]
-    #
-    # Layout per block:
-    #   sep
-    #   <outcome label>  |  Coef  Std. Err.  z  P>|z|  ...
-    #   sep
-    #   ...rows...
-    #   sep   <- serves as both block closer and next-block opener
-    #
-    # The outcome label is embedded in the label-column area of the column-
-    # header row (inner_lines[1]), replacing the blank padding.
-    for (i in seq_along(x$blocks)) {
-      blk <- x$blocks[[i]]
+    for (i in seq_along(blocks_show)) {
+      blk <- blocks_show[[i]]
       table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
                                        total_width = total_width,
                                        exp       = isTRUE(x$exp),
                                        exp_label = x$exp_label,
                                        level     = x$level %||% 95L,
                                        se_label  = x$se_label)
-      # Drop first sep (replaced by sep_line below) and last sep (printed
-      # manually after the loop so there is always a final separator before
-      # the "Base outcome:" footer).
       inner_lines <- table_lines[-c(1L, length(table_lines))]
 
       # Embed the outcome label in the label-column area of the header row.
@@ -418,7 +482,9 @@ print.tula_multinom_output <- function(x, ...) {
       cat(paste(inner_lines, collapse = "\n"), "\n", sep = "")
     }
     cat(sep_line, "\n", sep = "")
-    cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+    if (!select_mode || isTRUE(x$selectfooter)) {
+      cat("Base outcome: ", x$base_outcome, "\n", sep = "")
+    }
   }
 
   invisible(x)
@@ -440,7 +506,11 @@ print.tula_output <- function(x, ...) {
   max_w <- .resolve_width(x$width)
   vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
-  # Include ancillary labels and dep_var (if any) in width computation
+  select_mode <- !is.null(x$select)
+
+  # Include ancillary labels and dep_var (if any) in width computation.
+  # Always use full coef_df for width so layout is consistent regardless
+  # of which coefficients are selected.
   anc_labels <- if (!is.null(x$ancillary_df)) x$ancillary_df$label else character(0)
   dep_label  <- if (!is.null(x$dep_var) && nchar(x$dep_var) > 0L) x$dep_var else character(0)
   all_labels <- c(x$coef_df$label, anc_labels, dep_label)
@@ -454,20 +524,29 @@ print.tula_output <- function(x, ...) {
   )
   total_width <- min(natural_width, max_w)
 
+  # Filter coef_df when select mode is active
+  coef_df_show <- if (select_mode) {
+    .filter_select(x$coef_df, x$select)
+  } else {
+    x$coef_df
+  }
+
   # Optional family/link line (glm only)
-  if (!is.null(x$family_label)) {
+  if (!is.null(x$family_label) && (!select_mode || isTRUE(x$selectheader))) {
     cat(x$family_label, "\n", sep = "")
   }
 
   # Two-column header block
-  header_lines <- format_header(x$header_left, x$header_right,
-                                total_width = total_width,
-                                value_fmts  = vf)
-  cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+  if (!select_mode || isTRUE(x$selectheader)) {
+    header_lines <- format_header(x$header_left, x$header_right,
+                                  total_width = total_width,
+                                  value_fmts  = vf)
+    cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+  }
 
   # Coefficient table
   lv <- x$level %||% 95L
-  table_lines <- format_coef_table(x$coef_df, x$stat_label, x$wide,
+  table_lines <- format_coef_table(coef_df_show, x$stat_label, x$wide,
                                    total_width = total_width,
                                    exp       = isTRUE(x$exp),
                                    exp_label = x$exp_label,
@@ -492,7 +571,10 @@ print.tula_output <- function(x, ...) {
 
   # Splice ancillary parameter rows (if any) before the final separator.
   # table_lines ends with a separator; pop it, add ancillary lines, re-append.
-  if (!is.null(x$ancillary_df) && nrow(x$ancillary_df) > 0L) {
+  # In select mode, ancillary rows are only shown when selectfooter = TRUE.
+  show_ancillary <- !is.null(x$ancillary_df) && nrow(x$ancillary_df) > 0L &&
+    (!select_mode || isTRUE(x$selectfooter))
+  if (show_ancillary) {
     anc_lines <- format_ancillary_rows(x$ancillary_df, x$wide, total_width,
                                        level = lv)
     n_tl <- length(table_lines)
@@ -502,7 +584,10 @@ print.tula_output <- function(x, ...) {
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
 
   # Ordered-model footer: lowest and highest outcome levels, truncated to fit.
-  if (!is.null(x$outcome_levels) && length(x$outcome_levels) >= 2L) {
+  # In select mode, only shown when selectfooter = TRUE.
+  show_footer <- !is.null(x$outcome_levels) && length(x$outcome_levels) >= 2L &&
+    (!select_mode || isTRUE(x$selectfooter))
+  if (show_footer) {
     lo  <- as.character(x$outcome_levels[1L])
     hi  <- as.character(x$outcome_levels[length(x$outcome_levels)])
     prefix  <- "Lowest level: "

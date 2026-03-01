@@ -29,11 +29,20 @@ devtools::load_all(".")
 Two outcome blocks (`6`, `8`) each separated by a dashed line with the outcome
 label between. `(Intercept)` at the bottom of each block. Footer: `Base outcome: 4`.
 
-```{r test11}
+```{r}
+#| echo: false
 m11 <- multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE)
-cat("Narrow:\n")
+```
+
+Narrow:
+
+```{r}
 tula(m11)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m11, wide = TRUE)
 ```
 
@@ -45,11 +54,20 @@ tula(m11, wide = TRUE)
 in every outcome block — the same Stata-style grouping as lm/glm. Wide mode
 adds CI columns to every block.
 
-```{r test12}
+```{r}
+#| echo: false
 m12 <- multinom(factor(cyl) ~ wt + hp + factor(am), data = mtcars, trace = FALSE)
-cat("Narrow:\n")
+```
+
+Narrow:
+
+```{r}
 tula(m12)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m12, wide = TRUE)
 ```
 
@@ -60,13 +78,17 @@ tula(m12, wide = TRUE)
 **Expected:** Three outcome blocks (S, M, L with XS as base), each containing
 a `Species` factor group and a `Sepal.Width` row. Header and footer correct.
 
-```{r test13}
+```{r}
+#| echo: false
 iris4 <- iris
 iris4$size <- cut(iris$Sepal.Length,
                   breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
                   labels = c("XS", "S", "M", "L"),
                   include.lowest = TRUE)
 m13 <- multinom(size ~ Sepal.Width + Species, data = iris4, trace = FALSE)
+```
+
+```{r}
 tula(m13)
 ```
 
@@ -80,8 +102,8 @@ outcome label is longer than the label column, it is truncated with `~` — the
 `|` separator must remain perfectly aligned in every row of the output.
 "Base outcome:" remains as a footer below the final separator.
 
-```{r test14}
-# Use long, descriptive outcome labels so truncation is exercised.
+```{r}
+#| echo: false
 set.seed(42)
 df14 <- data.frame(
   outcome = factor(
@@ -93,12 +115,23 @@ df14 <- data.frame(
   female = rbinom(200, size = 1, prob = 0.5)
 )
 m14 <- multinom(outcome ~ age + female, data = df14, trace = FALSE)
+```
 
-cat("Default width:\n")
+Default width:
+
+```{r}
 tula(m14)
-cat("\nwide = TRUE:\n")
+```
+
+wide = TRUE:
+
+```{r}
 tula(m14, wide = TRUE)
-cat("\nwidth = 68 (forces label truncation):\n")
+```
+
+width = 68 (forces label truncation):
+
+```{r}
 tula(m14, width = 68)
 ```
 
@@ -110,12 +143,21 @@ tula(m14, width = 68)
 two-level outcome should match those from `glm(..., family = binomial)` closely
 (up to sign conventions — multinom models log-odds of level 2 vs level 1).
 
-```{r test15}
+```{r}
+#| echo: false
 m15_glm <- glm(am ~ wt + hp, data = mtcars, family = binomial)
 m15_mn  <- multinom(factor(am) ~ wt + hp, data = mtcars, trace = FALSE)
-cat("glm (logistic):\n")
+```
+
+glm (logistic):
+
+```{r}
 tula(m15_glm)
-cat("\nmultinom (binary):\n")
+```
+
+multinom (binary):
+
+```{r}
 tula(m15_mn)
 ```
 
@@ -127,8 +169,12 @@ tula(m15_mn)
 (`cyl` header with indented levels) appears exactly as in lm/glm. Verifies
 that factor handling works correctly even when the outcome is binary.
 
-```{r test15b}
+```{r}
+#| echo: false
 m15b <- multinom(factor(am) ~ wt + hp + factor(cyl), data = mtcars, trace = FALSE)
+```
+
+```{r}
 tula(m15b)
 ```
 
@@ -141,11 +187,20 @@ tula(m15b)
 **Expected:** Each factor group in every outcome block gets a reference row
 appended after its non-reference levels. Numeric columns blank on that row.
 
-```{r test20}
+```{r}
+#| echo: false
 m20 <- multinom(factor(cyl) ~ wt + hp + factor(am), data = mtcars, trace = FALSE)
-cat("ref = TRUE, narrow:\n")
+```
+
+ref = TRUE, narrow:
+
+```{r}
 tula(m20, ref = TRUE)
-cat("\nref = TRUE, wide:\n")
+```
+
+ref = TRUE, wide:
+
+```{r}
 tula(m20, ref = TRUE, wide = TRUE)
 ```
 
@@ -158,11 +213,20 @@ tula(m20, ref = TRUE, wide = TRUE)
 **Expected:** Each outcome block shows exponentiated coefficients and DMSE.
 Column headers `exp(b)` and `DMSE` appear in every block. Footer unchanged.
 
-```{r test28}
+```{r}
+#| echo: false
 m28 <- multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE)
-cat("exp = FALSE:\n")
+```
+
+exp = FALSE:
+
+```{r}
 tula(m28)
-cat("\nexp = TRUE:\n")
+```
+
+exp = TRUE:
+
+```{r}
 tula(m28, exp = TRUE)
 ```
 
@@ -173,9 +237,14 @@ tula(m28, exp = TRUE)
 **Expected:** Reference rows in each outcome block show `1`. Factor headers
 blank. Exponentiated coefficients and DMSE in all regular rows.
 
-```{r test29}
+```{r}
+#| echo: false
 m29 <- multinom(factor(cyl) ~ wt + hp + factor(am), data = mtcars, trace = FALSE)
-cat("exp = TRUE, ref = TRUE:\n")
+```
+
+exp = TRUE, ref = TRUE:
+
+```{r}
 tula(m29, exp = TRUE, ref = TRUE)
 ```
 
@@ -188,15 +257,24 @@ tula(m29, exp = TRUE, ref = TRUE)
 **Expected:** Long labels truncated with `~` in every outcome block; separators
 and all rows the same width.
 
-```{r test32}
+```{r}
+#| echo: false
 df32 <- mtcars
 names(df32)[names(df32) == "wt"] <- "vehicle_weight_lbs"
 names(df32)[names(df32) == "hp"] <- "gross_horsepower_bhp"
 m32 <- multinom(factor(cyl) ~ vehicle_weight_lbs + gross_horsepower_bhp,
                 data = df32, trace = FALSE)
-cat("Default width:\n")
+```
+
+Default width:
+
+```{r}
 tula(m32)
-cat("\nwidth = 68:\n")
+```
+
+width = 68:
+
+```{r}
 tula(m32, width = 68)
 ```
 
@@ -207,8 +285,9 @@ tula(m32, width = 68)
 **Expected:** A warning is issued ("width cannot be less than 60; using width = 60.")
 and the output is produced at width = 60, not suppressed.
 
-```{r test33}
-cat("multinom with width = 30 (should warn and use 60):\n")
+multinom with width = 30 (should warn and use 60):
+
+```{r}
 withCallingHandlers(
   tula(multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE), width = 30),
   warning = function(w) { cat("Warning:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") }
@@ -229,11 +308,20 @@ separator. `dep_var` label appears in the upper-left of the column header row.
 Header block printed once above the table. "Base outcome:" and star legend
 printed below.
 
-```{r test33a}
+```{r}
+#| echo: false
 m_par <- multinom(factor(cyl) ~ wt + hp, data = mtcars, trace = FALSE)
-cat("Stacked layout (default):\n")
+```
+
+Stacked layout (default):
+
+```{r}
 tula(m_par)
-cat("\nParallel layout:\n")
+```
+
+Parallel layout:
+
+```{r}
 tula(m_par, parallel = TRUE)
 ```
 
@@ -246,12 +334,21 @@ With `ref = FALSE` (default): reference level omitted, single indented level
 row for each factor level. With `ref = TRUE`: reference level rows show `0`
 (right-aligned) in each outcome column with blank SE rows.
 
-```{r test33b}
+```{r}
+#| echo: false
 mtcars$gear_f <- factor(mtcars$gear)
 m_par2 <- multinom(factor(cyl) ~ wt + gear_f, data = mtcars, trace = FALSE)
-cat("parallel = TRUE (ref = FALSE, default):\n")
+```
+
+parallel = TRUE (ref = FALSE, default):
+
+```{r}
 tula(m_par2, parallel = TRUE)
-cat("\nparallel = TRUE, ref = TRUE:\n")
+```
+
+parallel = TRUE, ref = TRUE:
+
+```{r}
 tula(m_par2, parallel = TRUE, ref = TRUE)
 ```
 
@@ -264,10 +361,15 @@ tula(m_par2, parallel = TRUE, ref = TRUE)
 Reference rows (if shown with `ref = TRUE`) display `1` instead of `0`, with
 blank SE row. No confidence intervals.
 
-```{r test33c}
-cat("parallel = TRUE, exp = TRUE:\n")
+parallel = TRUE, exp = TRUE:
+
+```{r}
 tula(m_par, parallel = TRUE, exp = TRUE)
-cat("\nparallel = TRUE, exp = TRUE, ref = TRUE:\n")
+```
+
+parallel = TRUE, exp = TRUE, ref = TRUE:
+
+```{r}
 tula(m_par2, parallel = TRUE, exp = TRUE, ref = TRUE)
 ```
 
@@ -280,11 +382,20 @@ columns for `carb`. Second call at `width = 60` triggers an informative error
 noting that the combination of width and number of outcomes is too narrow, and
 suggesting a larger `width` or `parallel = FALSE`.
 
-```{r test33d}
+```{r}
+#| echo: false
 m_carb <- multinom(factor(carb) ~ wt + hp, data = mtcars, trace = FALSE)
-cat("6-level carb model, parallel = TRUE, width = 80 (just fits):\n")
+```
+
+6-level carb model, parallel = TRUE, width = 80 (just fits):
+
+```{r}
 tula(m_carb, parallel = TRUE, width = 80)
-cat("\nSame model, width = 60 (should error — 5 columns need all 60 chars):\n")
+```
+
+Same model, width = 60 (should error --- 5 columns need all 60 chars):
+
+```{r}
 tryCatch(
   print(tula(m_carb, parallel = TRUE, width = 60)),
   error = function(e) cat("Error caught as expected:\n", conditionMessage(e), "\n")

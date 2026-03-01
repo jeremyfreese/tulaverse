@@ -115,7 +115,7 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "rq",
     header_left  = header_left,
     header_right = header_right,
@@ -130,6 +130,7 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     level        = level,
     se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
+  .attach_select(out, ...)
 }
 
 
@@ -302,7 +303,7 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   family_label <- paste0("Quantile regression (",
                          length(taus), " quantiles)")
 
-  new_tula_rqs_output(
+  out <- new_tula_rqs_output(
     header_left  = header_left,
     header_right = header_right,
     blocks       = blocks,
@@ -317,6 +318,7 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     family_label = family_label,
     se_label     = rqs_se_label
   )
+  .attach_select(out, ...)
 }
 
 
@@ -415,7 +417,23 @@ print.tula_rqs_output <- function(x, ...) {
   max_w <- .resolve_width(x$width)
   vf    <- if (is.null(x$value_fmts)) character(0L) else x$value_fmts
 
+  # --- Select mode -----------------------------------------------------------
+  select_mode  <- !is.null(x$select)
+  selectheader <- isTRUE(x$selectheader)
+  selectfooter <- isTRUE(x$selectfooter)
+
+  # Use full (unfiltered) labels for width computation so layout is consistent
   all_labels <- unlist(lapply(x$blocks, function(b) b$coef_df$label))
+
+  # Build filtered blocks for display when select is active
+  if (select_mode) {
+    blocks_show <- lapply(x$blocks, function(b) {
+      b$coef_df <- .filter_select(b$coef_df, x$select)
+      b
+    })
+  } else {
+    blocks_show <- x$blocks
+  }
 
   natural_width <- compute_total_width(
     header_left  = x$header_left,
@@ -443,33 +461,35 @@ print.tula_rqs_output <- function(x, ...) {
   if (x$wide) num_cols_w <- num_cols_w + 1L + 10L + 1L + 10L
   lbl_w <- total_width - num_cols_w
 
-  # Family label
-  if (!is.null(x$family_label)) {
-    cat(x$family_label, "\n", sep = "")
-  }
-
-  # Header (shared)
-  if (length(x$header_left) > 0L || length(x$header_right) > 0L) {
-    header_lines <- format_header(x$header_left, x$header_right,
-                                  total_width = total_width,
-                                  value_fmts  = vf)
-    cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+  # Family label + header (shown unless select mode without selectheader)
+  if (!select_mode || selectheader) {
+    if (!is.null(x$family_label)) {
+      cat(x$family_label, "\n", sep = "")
+    }
+    if (length(x$header_left) > 0L || length(x$header_right) > 0L) {
+      header_lines <- format_header(x$header_left, x$header_right,
+                                    total_width = total_width,
+                                    value_fmts  = vf)
+      cat(paste(header_lines, collapse = "\n"), "\n", sep = "")
+    }
   }
 
   if (isTRUE(x$parallel)) {
     # Parallel: use the same renderer as multinom
     table_lines <- .format_parallel_multinom_table(
-      blocks      = x$blocks,
+      blocks      = blocks_show,
       dep_var     = x$dep_var,
       total_width = total_width,
       exp         = isTRUE(x$exp)
     )
     cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
-    cat("* p<0.05  ** p<0.01  *** p<0.001\n")
+    if (!select_mode || selectfooter) {
+      cat("* p<0.05  ** p<0.01  *** p<0.001\n")
+    }
   } else {
     # Stacked layout: one block per quantile
-    for (i in seq_along(x$blocks)) {
-      blk <- x$blocks[[i]]
+    for (i in seq_along(blocks_show)) {
+      blk <- blocks_show[[i]]
       table_lines <- format_coef_table(blk$coef_df, x$stat_label, x$wide,
                                        total_width = total_width,
                                        exp       = isTRUE(x$exp),

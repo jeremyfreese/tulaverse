@@ -95,10 +95,18 @@ tula(m1, wide = TRUE, level = 90)
 ## 12. Comparison: regular glm vs survey glm
 
 ```{r}
-cat("--- Regular GLM ---\n")
+#| echo: false
 m_reg <- glm(api00 ~ ell + meals, data = apistrat)
-tula(m_reg)
+```
 
-cat("\n--- Survey GLM (same data, stratified design) ---\n")
+Regular GLM:
+
+```{r}
+tula(m_reg)
+```
+
+Survey GLM (same data, stratified design):
+
+```{r}
 tula(m1)
 ```

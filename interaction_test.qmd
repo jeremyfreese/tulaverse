@@ -28,12 +28,22 @@ current behavior and identify what changes (if any) might be desirable.
 The simplest case: two continuous predictors crossed with `*`.
 R creates three terms: the two main effects plus their product (`cyl:wt`).
 
-```{r num-x-num}
+```{r}
+#| echo: false
 m1 <- lm(mpg ~ cyl * wt, data = mtcars)
+```
+
+```{r}
 summary(m1)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m1)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m1, wide = TRUE)
 ```
 
@@ -44,8 +54,12 @@ tula(m1, wide = TRUE)
 Same model as Section 1 written with explicit `+` and `:` instead of `*`.
 Verifies that both formula styles produce identical output.
 
-```{r num-x-num-colon}
+```{r}
+#| echo: false
 m2 <- lm(mpg ~ cyl + wt + cyl:wt, data = mtcars)
+```
+
+```{r}
 tula(m2)
 ```
 
@@ -57,14 +71,28 @@ One factor and one continuous predictor crossed with `*`.
 R creates main effects for both plus separate slopes (`factor:numeric`) for
 each non-reference factor level.
 
-```{r factor-x-num}
+```{r}
+#| echo: false
 m3 <- lm(mpg ~ factor(cyl) * wt, data = mtcars)
+```
+
+```{r}
 summary(m3)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m3)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m3, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m3, wide = TRUE)
 ```
 
@@ -75,15 +103,24 @@ tula(m3, wide = TRUE)
 Same as Section 3 but the factor is stored as a named column, which can
 affect how labels appear.
 
-```{r factor-x-num-named}
+```{r}
+#| echo: false
 df4 <- mtcars
 df4$cyl_f <- factor(mtcars$cyl)
-
 m4 <- lm(mpg ~ cyl_f * wt, data = df4)
+```
+
+```{r}
 summary(m4)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m4)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m4, ref = TRUE)
 ```
 
@@ -94,14 +131,28 @@ tula(m4, ref = TRUE)
 Two factor variables crossed with `*`.
 Produces main-effect groups for each factor plus interaction dummy rows.
 
-```{r factor-x-factor}
+```{r}
+#| echo: false
 m5 <- lm(mpg ~ factor(cyl) * factor(am), data = mtcars)
+```
+
+```{r}
 summary(m5)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m5)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m5, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m5, wide = TRUE)
 ```
 
@@ -111,16 +162,25 @@ tula(m5, wide = TRUE)
 
 Same as Section 5 but using pre-created named factor columns.
 
-```{r factor-x-factor-named}
+```{r}
+#| echo: false
 df6 <- mtcars
 df6$cyl_f <- factor(mtcars$cyl)
 df6$am_f  <- factor(mtcars$am, labels = c("automatic", "manual"))
-
 m6 <- lm(mpg ~ cyl_f * am_f, data = df6)
+```
+
+```{r}
 summary(m6)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m6)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m6, ref = TRUE)
 ```
 
@@ -132,11 +192,17 @@ Using `:` directly to include an interaction term without its component
 main effect (uncommon but valid). Shows how tula handles a model where
 the term labels don't include one of the constituent variables.
 
-```{r interaction-only}
+```{r}
+#| echo: false
 # wt main effect only; cyl appears only in the interaction
 m7 <- lm(mpg ~ wt + cyl:wt, data = mtcars)
+```
+
+```{r}
 summary(m7)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m7)
 ```
 
@@ -147,12 +213,22 @@ tula(m7)
 A three-way `*` expansion among continuous predictors, producing all two-way
 and the three-way interaction terms.
 
-```{r three-way-num}
+```{r}
+#| echo: false
 m8 <- lm(mpg ~ cyl * wt * hp, data = mtcars)
+```
+
+```{r}
 summary(m8)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m8)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m8, wide = TRUE)
 ```
 
@@ -162,17 +238,30 @@ tula(m8, wide = TRUE)
 
 A realistic model: a factor × numeric interaction alongside other predictors.
 
-```{r factor-x-num-covariates}
+```{r}
+#| echo: false
 df9 <- mtcars
 df9$transmission <- factor(mtcars$am, labels = c("automatic", "manual"))
-
 m9 <- lm(mpg ~ transmission * wt + hp + qsec, data = df9)
+```
+
+```{r}
 summary(m9)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m9)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m9, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m9, wide = TRUE)
 ```
 
@@ -183,22 +272,35 @@ tula(m9, wide = TRUE)
 Interaction terms formed from long variable names, to see how truncation
 applies to terms like `long_name_a:long_name_b`.
 
-```{r long-interaction-names}
+```{r}
+#| echo: false
 df10 <- mtcars
 df10$fuel_efficiency_rating   <- mtcars$mpg + rnorm(32, 0, 1)
 df10$engine_displacement_liters <- mtcars$disp / 61.024
 df10$vehicle_curb_weight_lbs    <- mtcars$wt * 1000
 df10$transmission_type          <- factor(mtcars$am, labels = c("automatic", "manual"))
-
 m10 <- lm(mpg ~ fuel_efficiency_rating * engine_displacement_liters +
                 vehicle_curb_weight_lbs + transmission_type,
            data = df10)
+```
+
+```{r}
 summary(m10)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m10)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m10, wide = TRUE)
-cat("\nwidth = Inf:\n")
+```
+
+width = Inf:
+
+```{r}
 tula(m10, width = Inf)
 ```
 
@@ -209,14 +311,28 @@ tula(m10, width = Inf)
 A logistic regression with a factor × numeric interaction, to confirm behavior
 carries over to GLM models.
 
-```{r glm-interaction}
+```{r}
+#| echo: false
 m11 <- glm(am ~ factor(cyl) * wt, data = mtcars, family = binomial)
+```
+
+```{r}
 summary(m11)$coefficients
-cat("\n")
+```
+
+```{r}
 tula(m11)
-cat("\nWith ref = TRUE:\n")
+```
+
+With ref = TRUE:
+
+```{r}
 tula(m11, ref = TRUE)
-cat("\nWide:\n")
+```
+
+Wide:
+
+```{r}
 tula(m11, wide = TRUE)
 ```
 
@@ -227,15 +343,29 @@ tula(m11, wide = TRUE)
 `I(x^2)` and `poly()` create derived numeric terms that are not interactions
 but have non-standard names. Included for comparison.
 
-```{r polynomial}
+```{r}
+#| echo: false
 m12a <- lm(mpg ~ wt + I(wt^2), data = mtcars)
+```
+
+```{r}
 tula(m12a)
+```
 
-cat("\n")
+```{r}
+#| echo: false
 m12b <- lm(mpg ~ poly(wt, 2), data = mtcars)
-tula(m12b)
+```
 
-cat("\n")
+```{r}
+tula(m12b)
+```
+
+```{r}
+#| echo: false
 m12c <- lm(mpg ~ poly(wt, 2, raw = TRUE), data = mtcars)
+```
+
+```{r}
 tula(m12c)
 ```

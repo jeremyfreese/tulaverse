@@ -66,7 +66,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
   dep_var <- tryCatch(deparse(formula(model)[[2L]]), error = function(e) NULL)
 
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "glm",
     header_left  = header_left,
     header_right = header_right,
@@ -81,4 +81,5 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     level        = level,
     se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
+  .attach_select(out, ...)
 }

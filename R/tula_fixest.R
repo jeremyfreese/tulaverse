@@ -118,7 +118,7 @@ tula.fixest <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                            xlevels    = parsed$xlevels)
 
   # --- Output ---------------------------------------------------------------
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "fixest",
     header_left  = header_left,
     header_right = header_right,
@@ -135,6 +135,7 @@ tula.fixest <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     level        = level,
     se_label     = se_label
   )
+  .attach_select(out, ...)
 }
 
 

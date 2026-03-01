@@ -85,7 +85,7 @@ tula.svyglm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   }
 
   # --- Output ----------------------------------------------------------------
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "svyglm",
     header_left  = header_left,
     header_right = header_right,
@@ -101,6 +101,7 @@ tula.svyglm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     se_label     = NULL,
     se_super     = "Linearized"
   )
+  .attach_select(out, ...)
 }
 
 

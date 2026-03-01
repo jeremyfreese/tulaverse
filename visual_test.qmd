@@ -25,12 +25,17 @@ Coefficient table with `cyl`, `wt`, `hp`. Intercept at bottom after separator.
 Default output includes 95% CI columns (wide mode auto-activates at width ≥ 80).
 
 ```{r}
+#| echo: false
 m1 <- lm(mpg ~ cyl + wt + hp, data = mtcars)
-tula(m1)
 ```
 
 ```{r}
-cat("Explicitly narrow (wide = FALSE):\n")
+tula(m1)
+```
+
+Explicitly narrow (wide = FALSE):
+
+```{r}
 tula(m1, wide = FALSE)
 ```
 
@@ -40,8 +45,12 @@ tula(m1, wide = FALSE)
 indented below it. Reference level (`4`) does not appear. Default is wide.
 
 ```{r}
+#| echo: false
 mtcars$cyl_f <- factor(mtcars$cyl)
 m2 <- lm(mpg ~ cyl_f + wt, data = mtcars)
+```
+
+```{r}
 tula(m2)
 ```
 
@@ -51,7 +60,11 @@ tula(m2)
 `cyl` and `am` (the `factor()` wrapper is stripped for display).
 
 ```{r}
+#| echo: false
 m3 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+```
+
+```{r}
 tula(m3)
 ```
 
@@ -61,7 +74,11 @@ tula(m3)
 indented below it. `setosa` (the reference) does not appear.
 
 ```{r}
+#| echo: false
 m4 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
+```
+
+```{r}
 tula(m4)
 ```
 
@@ -71,7 +88,11 @@ tula(m4)
 header — it prints as a plain row. The `factor(am)` levels are grouped normally.
 
 ```{r}
+#| echo: false
 m5 <- lm(mpg ~ cyl * factor(am) + wt, data = mtcars)
+```
+
+```{r}
 tula(m5)
 ```
 
@@ -86,7 +107,11 @@ Header right: N, McFadden R-sq, Nagelkerke R-sq. Coefficient table uses `z`
 and `P>|z|`.
 
 ```{r}
+#| echo: false
 m6 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+```
+
+```{r}
 tula(m6)
 ```
 
@@ -96,7 +121,11 @@ tula(m6)
 non-reference levels.
 
 ```{r}
+#| echo: false
 m7 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+```
+
+```{r}
 tula(m7)
 ```
 
@@ -105,8 +134,12 @@ tula(m7)
 **Expected:** `Family: poisson / Link: log` at top. Stat column header is `z`.
 
 ```{r}
+#| echo: false
 mtcars$cyl_c <- mtcars$cyl - mean(mtcars$cyl)
 m8 <- glm(carb ~ cyl_c + wt, data = mtcars, family = poisson)
+```
+
+```{r}
 tula(m8)
 ```
 
@@ -116,7 +149,11 @@ tula(m8)
 and p-value header should be `P>|t|`.
 
 ```{r}
+#| echo: false
 m9 <- glm(mpg ~ cyl + wt, data = mtcars, family = gaussian)
+```
+
+```{r}
 tula(m9)
 ```
 
@@ -126,7 +163,11 @@ tula(m9)
 logistic output.
 
 ```{r}
+#| echo: false
 m10 <- glm(am ~ cyl + wt, data = mtcars, family = binomial(link = "probit"))
+```
+
+```{r}
 tula(m10)
 ```
 
@@ -135,6 +176,7 @@ tula(m10)
 # Ordered regression (polr / clm)
 
 ```{r}
+#| echo: false
 library(MASS)
 mtcars$gear_ord <- factor(mtcars$gear, ordered = TRUE)
 ```
@@ -147,7 +189,11 @@ Predictor rows use `z` / `P>|z|`. Cutpoints (`3|4`, `4|5`) appear after an
 extra separator, with Coef. and Std. Err. populated but `z` and `P>|z|` blank.
 
 ```{r}
+#| echo: false
 m11 <- polr(gear_ord ~ mpg + wt, data = mtcars, Hess = TRUE)
+```
+
+```{r}
 tula(m11)
 ```
 
@@ -157,12 +203,17 @@ tula(m11)
 in the predictor section, *and* cutpoints in the lower section.
 
 ```{r}
+#| echo: false
 m12 <- polr(gear_ord ~ mpg + factor(cyl), data = mtcars, Hess = TRUE)
-tula(m12)
 ```
 
 ```{r}
-cat("ref = TRUE:\n")
+tula(m12)
+```
+
+ref = TRUE:
+
+```{r}
 tula(m12, ref = TRUE)
 ```
 
@@ -180,6 +231,7 @@ tula(m12, exp = TRUE)
 **Expected:** Three cutpoint rows (`XS|S`, `S|M`, `M|L`).
 
 ```{r}
+#| echo: false
 iris4 <- iris
 iris4$size <- cut(iris$Sepal.Length,
                   breaks = quantile(iris$Sepal.Length, c(0, .25, .5, .75, 1)),
@@ -187,6 +239,9 @@ iris4$size <- cut(iris$Sepal.Length,
                   include.lowest = TRUE,
                   ordered_result = TRUE)
 m14 <- polr(size ~ Sepal.Width + Petal.Length + Species, data = iris4, Hess = TRUE)
+```
+
+```{r}
 tula(m14)
 ```
 
@@ -195,7 +250,11 @@ tula(m14)
 **Expected:** Family label reads `Ordered regression / Link: probit`.
 
 ```{r}
+#| echo: false
 m15 <- polr(gear_ord ~ mpg + wt, data = mtcars, method = "probit", Hess = TRUE)
+```
+
+```{r}
 tula(m15)
 ```
 
@@ -242,6 +301,7 @@ tula(m14)
 narrow. Each name gets half the available space.
 
 ```{r}
+#| echo: false
 iris4b <- iris
 iris4b$verbosity <- factor(
   cut(iris$Sepal.Length,
@@ -253,9 +313,17 @@ iris4b$verbosity <- factor(
       ordered_result = TRUE)
 )
 m19b <- polr(verbosity ~ Sepal.Width + Petal.Length, data = iris4b, Hess = TRUE)
-cat("Wide (labels fit):\n")
+```
+
+Wide (labels fit):
+
+```{r}
 tula(m19b)
-cat("\nNarrow width = 60 (labels truncated):\n")
+```
+
+Narrow width = 60 (labels truncated):
+
+```{r}
 tula(m19b, width = 60)
 ```
 
@@ -285,7 +353,11 @@ Coefficient table with `z` / `P>|z|`. Ancillary section at bottom with
 `/lnalpha` and `alpha` rows, each preceded by a separator.
 
 ```{r}
+#| echo: false
 m21 <- glm.nb(carb ~ wt + hp, data = mtcars)
+```
+
+```{r}
 tula(m21)
 ```
 
@@ -295,12 +367,17 @@ tula(m21)
 `6` and `8`. Ancillary section unchanged.
 
 ```{r}
+#| echo: false
 m22 <- glm.nb(carb ~ wt + factor(cyl), data = mtcars)
-tula(m22)
 ```
 
 ```{r}
-cat("ref = TRUE:\n")
+tula(m22)
+```
+
+ref = TRUE:
+
+```{r}
 tula(m22, ref = TRUE)
 ```
 
@@ -320,9 +397,13 @@ tula(m22, exp = TRUE, ref = TRUE)
 ancillary) have the same total width.
 
 ```{r}
+#| echo: false
 df24 <- mtcars
 df24$very_long_variable_name <- mtcars$hp
 m24 <- glm.nb(carb ~ wt + very_long_variable_name + factor(cyl), data = df24)
+```
+
+```{r}
 tula(m24, width = 68)
 ```
 
@@ -331,11 +412,20 @@ tula(m24, width = 68)
 **Expected:** Coefficient signs and rough magnitudes similar between NB and
 Poisson. The NB model has an ancillary section; the Poisson does not.
 
+Negative binomial:
+
 ```{r}
-cat("Negative binomial:\n")
 tula(m21)
-cat("\nPoisson:\n")
+```
+
+Poisson:
+
+```{r}
+#| echo: false
 m_pois <- glm(carb ~ wt + hp, data = mtcars, family = poisson)
+```
+
+```{r}
 tula(m_pois)
 ```
 
@@ -344,6 +434,7 @@ tula(m_pois)
 # Quantile regression (quantreg::rq)
 
 ```{r}
+#| echo: false
 if (requireNamespace("quantreg", quietly = TRUE)) {
   library(quantreg)
 } else {
@@ -479,6 +570,7 @@ if (requireNamespace("quantreg", quietly = TRUE)) {
 # Cox proportional hazards (survival::coxph)
 
 ```{r}
+#| echo: false
 library(survival)
 ```
 
@@ -491,7 +583,11 @@ and delta-method SE (`DMSE`). CIs are exponentiated (asymmetric). `z` / `P>|z|`
 stat columns. No intercept row.
 
 ```{r}
+#| echo: false
 m37 <- coxph(Surv(time, status) ~ age + sex + ph.ecog, data = lung)
+```
+
+```{r}
 tula(m37)
 ```
 
@@ -501,9 +597,13 @@ tula(m37)
 Hazard ratios and exponentiated CIs. No intercept row.
 
 ```{r}
+#| echo: false
 lung2 <- lung
 lung2$ph.ecog_f <- factor(lung2$ph.ecog)
 m38 <- coxph(Surv(time, status) ~ age + sex + ph.ecog_f, data = lung2)
+```
+
+```{r}
 tula(m38)
 ```
 
@@ -544,10 +644,19 @@ tula(m37, wide = FALSE)
 `0` in the Coef. column and blanks for SE, t, and P>|t|.
 
 ```{r}
+#| echo: false
 m37 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
-cat("ref = FALSE (default):\n")
+```
+
+ref = FALSE (default):
+
+```{r}
 tula(m37)
-cat("\nref = TRUE:\n")
+```
+
+ref = TRUE:
+
+```{r}
 tula(m37, ref = TRUE)
 ```
 
@@ -557,7 +666,11 @@ tula(m37, ref = TRUE)
 `am` base = `0`.
 
 ```{r}
+#| echo: false
 m38 <- lm(mpg ~ factor(cyl) + factor(am) + wt, data = mtcars)
+```
+
+```{r}
 tula(m38, ref = TRUE)
 ```
 
@@ -567,7 +680,11 @@ tula(m38, ref = TRUE)
 Stat column is `z`; p-value column is `P>|z|`.
 
 ```{r}
+#| echo: false
 m39 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+```
+
+```{r}
 tula(m39, ref = TRUE)
 ```
 
@@ -577,10 +694,19 @@ tula(m39, ref = TRUE)
 `virginica`.
 
 ```{r}
+#| echo: false
 m40 <- lm(Sepal.Length ~ Sepal.Width + Species, data = iris)
-cat("ref = FALSE (default):\n")
+```
+
+ref = FALSE (default):
+
+```{r}
 tula(m40)
-cat("\nref = TRUE:\n")
+```
+
+ref = TRUE:
+
+```{r}
 tula(m40, ref = TRUE)
 ```
 
@@ -591,6 +717,7 @@ The base-category row should truncate cleanly, and all rows must be the same
 width as the separator lines.
 
 ```{r}
+#| echo: false
 df41 <- mtcars
 df41$engine_type <- factor(
   mtcars$cyl,
@@ -600,6 +727,9 @@ df41$engine_type <- factor(
              "Eight-cylinder V-type engine")
 )
 m41 <- lm(mpg ~ wt + engine_type, data = df41)
+```
+
+```{r}
 tula(m41, ref = TRUE)
 ```
 
@@ -612,15 +742,24 @@ coefficient prints directly on the variable name row (no indentation).
 NOT collapse because the non-ref level is `treated` ≠ `treatment`.
 
 ```{r}
+#| echo: false
 df42 <- mtcars
 df42$male <- factor(ifelse(mtcars$am == 1, "male", "female"),
                     levels = c("female", "male"))
 df42$treatment <- factor(ifelse(mtcars$am == 1, "treated", "control"),
                          levels = c("control", "treated"))
 m42 <- lm(mpg ~ wt + male + treatment, data = df42)
-cat("Default (ref = FALSE) — 'male' collapses, 'treatment' does not:\n")
+```
+
+Default (ref = FALSE) -- 'male' collapses, 'treatment' does not:
+
+```{r}
 tula(m42)
-cat("\nref = TRUE — collapse suppressed (male has 2 rows):\n")
+```
+
+ref = TRUE -- collapse suppressed (male has 2 rows):
+
+```{r}
 tula(m42, ref = TRUE)
 ```
 
@@ -634,14 +773,23 @@ tula(m42, ref = TRUE)
 levels are already strings (e.g. `"Four"`, `"Six"`, `"Eight"`).
 
 ```{r}
+#| echo: false
 df43 <- mtcars
 df43$cyl_named <- factor(mtcars$cyl,
                          levels = c(4, 6, 8),
                          labels = c("Four", "Six", "Eight"))
 m43 <- lm(mpg ~ cyl_named + wt, data = df43)
-cat("label = TRUE (default):\n")
+```
+
+label = TRUE (default):
+
+```{r}
 tula(m43, ref = TRUE, label = TRUE)
-cat("\nlabel = FALSE:\n")
+```
+
+label = FALSE:
+
+```{r}
 tula(m43, ref = TRUE, label = FALSE)
 ```
 
@@ -652,15 +800,24 @@ by haven), `label = TRUE` substitutes numeric codes with text labels.
 `label = FALSE` shows raw numeric suffixes.
 
 ```{r}
+#| echo: false
 df44 <- mtcars
 df44$cyl_lbl <- mtcars$cyl
 attr(df44$cyl_lbl, "labels") <- c("Four cylinders" = 4,
                                    "Six cylinders"  = 6,
                                    "Eight cylinders" = 8)
 m44 <- lm(mpg ~ factor(cyl_lbl) + wt, data = df44)
-cat("label = TRUE (default) — shows full label text:\n")
+```
+
+label = TRUE (default) -- shows full label text:
+
+```{r}
 tula(m44, ref = TRUE, label = TRUE)
-cat("\nlabel = FALSE — shows raw numeric suffixes:\n")
+```
+
+label = FALSE -- shows raw numeric suffixes:
+
+```{r}
 tula(m44, ref = TRUE, label = FALSE)
 ```
 
@@ -675,10 +832,19 @@ shows `exp(coef)`, SE column shows `exp(coef) * SE`. `t` and `P>|t|`
 unchanged. CIs exponentiated when wide mode is active.
 
 ```{r}
+#| echo: false
 m45 <- lm(mpg ~ cyl + wt, data = mtcars)
-cat("exp = FALSE (default):\n")
+```
+
+exp = FALSE (default):
+
+```{r}
 tula(m45, wide = FALSE)
-cat("\nexp = TRUE:\n")
+```
+
+exp = TRUE:
+
+```{r}
 tula(m45, exp = TRUE)
 ```
 
@@ -688,7 +854,11 @@ tula(m45, exp = TRUE)
 coefficients and DMSE. Reference-level row shows `1` instead of `0`.
 
 ```{r}
+#| echo: false
 m46 <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+```
+
+```{r}
 tula(m46, exp = TRUE, ref = TRUE)
 ```
 
@@ -698,10 +868,19 @@ tula(m46, exp = TRUE, ref = TRUE)
 R's `exp(coef(m))`.
 
 ```{r}
+#| echo: false
 m47 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
-cat("exp = TRUE (odds ratios):\n")
+```
+
+exp = TRUE (odds ratios):
+
+```{r}
 tula(m47, exp = TRUE)
-cat("\nVerification — exp(coef):\n")
+```
+
+Verification -- exp(coef):
+
+```{r}
 print(exp(coef(m47)))
 ```
 
@@ -711,7 +890,11 @@ print(exp(coef(m47)))
 unchanged.
 
 ```{r}
+#| echo: false
 m48 <- glm(am ~ factor(cyl) + wt, data = mtcars, family = binomial)
+```
+
+```{r}
 tula(m48, exp = TRUE, ref = TRUE)
 ```
 
@@ -726,12 +909,25 @@ tula(m48, exp = TRUE, ref = TRUE)
 p-values are identical across all three.
 
 ```{r}
+#| echo: false
 m49 <- lm(mpg ~ cyl + wt, data = mtcars)
-cat("level = 90:\n")
+```
+
+level = 90:
+
+```{r}
 tula(m49, level = 90)
-cat("\nlevel = 95 (default):\n")
+```
+
+level = 95 (default):
+
+```{r}
 tula(m49)
-cat("\nlevel = 99:\n")
+```
+
+level = 99:
+
+```{r}
 tula(m49, level = 99)
 ```
 
@@ -740,10 +936,15 @@ tula(m49, level = 99)
 **Expected:** `level = 0.90` is treated the same as `level = 90` (auto-multiplied
 by 100). `level = 40` produces an error.
 
+level = 0.90 (same as 90):
+
 ```{r}
-cat("level = 0.90 (same as 90):\n")
 tula(m49, level = 0.90)
-cat("\nlevel = 40 (should error):\n")
+```
+
+level = 40 (should error):
+
+```{r}
 tryCatch(
   tula(m49, level = 40),
   error = function(e) cat("Error caught:", conditionMessage(e), "\n")
@@ -761,8 +962,13 @@ exponentiated bounds: `exp(ci_lower)` and `exp(ci_upper)`. No suppression
 message.
 
 ```{r}
+#| echo: false
 m51 <- lm(mpg ~ cyl + wt, data = mtcars)
-cat("exp = TRUE, wide = TRUE:\n")
+```
+
+exp = TRUE, wide = TRUE:
+
+```{r}
 tula(m51, exp = TRUE, wide = TRUE)
 ```
 
@@ -772,10 +978,19 @@ tula(m51, exp = TRUE, wide = TRUE)
 bounds (odds ratio CIs). Compare with `exp(confint.default())`.
 
 ```{r}
+#| echo: false
 m52 <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
-cat("exp = TRUE, wide = TRUE:\n")
+```
+
+exp = TRUE, wide = TRUE:
+
+```{r}
 tula(m52, exp = TRUE, wide = TRUE)
-cat("\nVerification — exp(confint.default):\n")
+```
+
+Verification -- exp(confint.default):
+
+```{r}
 print(exp(confint.default(m52)))
 ```
 
@@ -784,8 +999,9 @@ print(exp(confint.default(m52)))
 **Expected:** A warning is issued ("width cannot be less than 60; using
 width = 60.") and the output is produced at width = 60.
 
+width = 40 (should warn and use 60):
+
 ```{r}
-cat("width = 40 (should warn and use 60):\n")
 withCallingHandlers(
   tula(lm(mpg ~ wt + cyl, data = mtcars), width = 40),
   warning = function(w) { cat("Warning:", conditionMessage(w), "\n"); invokeRestart("muffleWarning") }
@@ -801,7 +1017,11 @@ withCallingHandlers(
 **Expected:** p-values below 0.0001 display as `<.0001`.
 
 ```{r}
+#| echo: false
 m54 <- lm(Sepal.Length ~ Petal.Length + Petal.Width + Species, data = iris)
+```
+
+```{r}
 tula(m54)
 ```
 
@@ -811,7 +1031,11 @@ tula(m54)
 plus the intercept.
 
 ```{r}
+#| echo: false
 m55 <- lm(mpg ~ wt, data = mtcars)
+```
+
+```{r}
 tula(m55)
 ```
 
@@ -821,18 +1045,26 @@ tula(m55)
 under a header row with indented levels.
 
 ```{r}
+#| echo: false
 mtcars$gear_o <- factor(mtcars$gear, ordered = TRUE)
 m56 <- lm(mpg ~ gear_o + wt, data = mtcars)
+```
+
+```{r}
 tula(m56)
 ```
 
 ## Test 62 — glm with small sample (stress test)
 
 ```{r}
+#| echo: false
 iris_bin <- iris
 iris_bin$is_virginica <- as.integer(iris_bin$Species == "virginica")
 m57 <- glm(is_virginica ~ Sepal.Length + Sepal.Width,
            data = iris_bin, family = binomial)
+```
+
+```{r}
 tula(m57)
 ```
 
@@ -855,7 +1087,11 @@ tryCatch(
 SE values differ from the standard model SEs. No CI columns (wide = FALSE).
 
 ```{r}
+#| echo: false
 m_rob <- lm(mpg ~ cyl + wt + hp, data = mtcars)
+```
+
+```{r}
 tula(m_rob, wide = FALSE, robust = TRUE)
 ```
 
@@ -901,7 +1137,11 @@ tula(m_rob, wide = TRUE, cluster = "cyl")
 McFadden/Nagelkerke R-sq unchanged (still based on the original fitted model).
 
 ```{r}
+#| echo: false
 m_logit <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+```
+
+```{r}
 tula(m_logit, wide = FALSE, robust = TRUE)
 ```
 
@@ -920,8 +1160,12 @@ tula(m_logit, wide = TRUE, cluster = "cyl", exp = TRUE)
 All other Cox-specific header stats unchanged.
 
 ```{r}
+#| echo: false
 library(survival)
 m_cox <- coxph(Surv(time, status) ~ age + sex, data = lung)
+```
+
+```{r}
 tula(m_cox, wide = FALSE, robust = TRUE)
 ```
 
@@ -934,4 +1178,226 @@ is absent. Here we just confirm robust = TRUE succeeds when sandwich IS installe
 ```{r}
 cat("sandwich available:", requireNamespace("sandwich", quietly = TRUE), "\n")
 tula(m_rob, wide = FALSE, robust = TRUE)
+```
+
+---
+
+# select — Show only selected coefficients
+
+## Test 73 — lm: select a single numeric predictor
+
+**Expected:** Only the `wt` row appears (no header block, no intercept, no
+other predictors). Column layout matches the full table (same widths).
+
+```{r}
+#| echo: false
+m_sel <- lm(mpg ~ cyl + wt + hp, data = mtcars)
+```
+
+Full output:
+
+```{r}
+tula(m_sel)
+```
+
+`select = "wt"`:
+
+```{r}
+tula(m_sel, select = "wt")
+```
+
+## Test 74 — lm: select a factor group
+
+**Expected:** Selecting a factor name shows the group header row and all its
+indented level rows. Only `cyl` rows appear (header + levels 6, 8).
+
+```{r}
+#| echo: false
+m_sel2 <- lm(mpg ~ factor(cyl) + wt + hp, data = mtcars)
+```
+
+Full output:
+
+```{r}
+tula(m_sel2)
+```
+
+`select = "cyl"`:
+
+```{r}
+tula(m_sel2, select = "cyl")
+```
+
+## Test 75 — lm: select multiple predictors
+
+**Expected:** Both `wt` and `hp` rows appear. No header block, no intercept.
+
+```{r}
+tula(m_sel, select = c("wt", "hp"))
+```
+
+## Test 76 — lm: select with selectheader = TRUE
+
+**Expected:** `wt` row plus the full header block (AIC, BIC, R-sq, etc.).
+
+```{r}
+tula(m_sel, select = "wt", selectheader = TRUE)
+```
+
+## Test 77 — lm: select with selectfooter = TRUE (ordered model)
+
+**Expected:** Only the `mpg` row from the polr model, plus the
+Lowest/Highest footer. Cutpoints suppressed (they are footer-like,
+controlled by selectfooter).
+
+```{r}
+#| echo: false
+m_sel_polr <- polr(gear_ord ~ mpg + wt, data = mtcars, Hess = TRUE)
+```
+
+Full output:
+
+```{r}
+tula(m_sel_polr)
+```
+
+`select = "mpg", selectfooter = TRUE`:
+
+```{r}
+tula(m_sel_polr, select = "mpg", selectfooter = TRUE)
+```
+
+## Test 78 — glm: select with exp = TRUE
+
+**Expected:** Exponentiated coefficient for `wt` only. Column headers show
+`exp(b)` / `DMSE`. No other rows.
+
+```{r}
+#| echo: false
+m_sel_glm <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
+```
+
+```{r}
+tula(m_sel_glm, select = "wt", exp = TRUE)
+```
+
+## Test 79 — negbin: select suppresses ancillary rows
+
+**Expected:** Only `wt` row shown. Ancillary section (`/lnalpha`, `alpha`)
+suppressed (selectfooter = FALSE by default).
+
+```{r}
+#| echo: false
+m_sel_nb <- glm.nb(carb ~ wt + hp, data = mtcars)
+```
+
+Full output:
+
+```{r}
+tula(m_sel_nb)
+```
+
+`select = "wt"`:
+
+```{r}
+tula(m_sel_nb, select = "wt")
+```
+
+`select = "wt", selectfooter = TRUE`:
+
+```{r}
+tula(m_sel_nb, select = "wt", selectfooter = TRUE)
+```
+
+## Test 80 — multinom stacked: select
+
+**Expected:** Each outcome block shows only the `wt` row.
+No header block. Base outcome footer suppressed.
+
+```{r}
+#| echo: false
+library(nnet)
+m_sel_mn <- multinom(factor(cyl) ~ wt + hp + mpg, data = mtcars, trace = FALSE)
+```
+
+Full output:
+
+```{r}
+tula(m_sel_mn)
+```
+
+`select = "wt"`:
+
+```{r}
+tula(m_sel_mn, select = "wt")
+```
+
+## Test 81 — multinom parallel: select
+
+**Expected:** In parallel mode, only the `wt` row appears (coef line + SE
+line). Star legend always prints. Base outcome footer suppressed.
+
+`parallel = TRUE, select = "wt"`:
+
+```{r}
+tula(m_sel_mn, parallel = TRUE, select = "wt")
+```
+
+`parallel = TRUE, select = c("wt", "hp")`:
+
+```{r}
+tula(m_sel_mn, parallel = TRUE, select = c("wt", "hp"))
+```
+
+## Test 82 — rqs stacked: select
+
+**Expected:** Each quantile block shows only the selected predictor.
+
+```{r}
+#| echo: false
+if (requireNamespace("quantreg", quietly = TRUE)) {
+  m_sel_rqs <- rq(mpg ~ cyl + wt + hp, data = mtcars, tau = c(0.25, 0.5, 0.75))
+}
+```
+
+Full output:
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) tula(m_sel_rqs)
+```
+
+`select = "wt"`:
+
+```{r}
+if (requireNamespace("quantreg", quietly = TRUE)) tula(m_sel_rqs, select = "wt")
+```
+
+## Test 83 — select with ref = TRUE
+
+**Expected:** Selecting a factor with `ref = TRUE` shows the group header,
+all non-reference levels, AND the reference-level row.
+
+```{r}
+#| echo: false
+m_sel_ref <- lm(mpg ~ factor(cyl) + wt, data = mtcars)
+```
+
+```{r}
+tula(m_sel_ref, select = "cyl", ref = TRUE)
+```
+
+## Test 84 — select = NULL (default behaviour unchanged)
+
+**Expected:** Full output identical to not passing select at all.
+
+No select (default):
+
+```{r}
+tula(m_sel)
+```
+
+`select = NULL` (explicit):
+
+```{r}
+tula(m_sel, select = NULL)
 ```

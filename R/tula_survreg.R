@@ -133,7 +133,7 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   dep_var <- .survreg_dep_var(model)
 
   # --- Output ---------------------------------------------------------------
-  new_tula_output(
+  out <- new_tula_output(
     model_type   = "survreg",
     header_left  = header_left,
     header_right = header_right,
@@ -149,6 +149,7 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     level        = level,
     se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )
+  .attach_select(out, ...)
 }
 
 
