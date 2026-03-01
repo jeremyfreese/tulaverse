@@ -69,7 +69,8 @@
 #' @export
 tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
                     value = TRUE, label = TRUE, width = NULL,
-                    pct = "col", freq = TRUE, by = NULL, mean = NULL, ...) {
+                    pct = "col", freq = TRUE, by = NULL, mean = NULL,
+                    listwise = TRUE, ...) {
 
   # Capture expressions before evaluation
   y_expr    <- substitute(y)
@@ -104,17 +105,19 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
               !identical(mean_expr, quote(NULL))
 
   if (has_mean) {
-    if (!is.null(data)) {
-      mean_vec  <- eval(mean_expr, envir = data, enclos = parent.frame())
-      mean_name <- deparse(mean_expr)
-    } else {
-      mean_vec  <- mean
-      mean_name <- .extract_var_name(mean_expr)
-    }
-    mean_label <- attr(mean_vec, "label", exact = TRUE)
-    # Validate: mean variable must be numeric
-    if (!is.numeric(mean_vec)) {
-      stop("tulatab(): 'mean' variable must be numeric.", call. = FALSE)
+    # Resolve mean= into a list of numeric vectors + names + labels.
+    # Supports both single variable (mean = mpg) and c() syntax (mean = c(mpg, wt)).
+    resolved <- .resolve_mean_args(mean_expr, mean, data, parent.frame())
+    mean_list   <- resolved$vecs     # named list of numeric vectors
+    mean_names  <- resolved$names    # character vector
+    mean_labels <- resolved$labels   # character vector (NA where no label)
+
+    # Backward-compat: single-variable case also sets mean_vec / mean_name / mean_label
+    if (length(mean_list) == 1L) {
+      mean_vec   <- mean_list[[1L]]
+      mean_name  <- mean_names[1L]
+      mean_label <- mean_labels[1L]
+      if (is.na(mean_label)) mean_label <- NULL
     }
   }
 
@@ -135,6 +138,12 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
     if (is.data.frame(x_vec)) {
       stop("tulatab(): 'x' appears to be a data frame. ",
            "Did you mean tulatab(y, data = ...)?", call. = FALSE)
+    }
+
+    # Guard: multi-variable mean= not supported in two-way mode
+    if (has_mean && length(mean_list) > 1L) {
+      stop("tulatab(): multiple mean variables are only supported in one-way mode.",
+           call. = FALSE)
     }
 
     # Guard: mean variable must have same length as y and x
@@ -324,8 +333,13 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
   }
 
   # --- Guard: mean= length check for one-way mode ---------------------------
-  if (has_mean && length(mean_vec) != length(y_vec)) {
-    stop("tulatab(): 'mean' must have the same length as y.", call. = FALSE)
+  if (has_mean) {
+    for (k in seq_along(mean_list)) {
+      if (length(mean_list[[k]]) != length(y_vec)) {
+        stop(sprintf("tulatab(): mean variable '%s' must have the same length as y.",
+                     mean_names[k]), call. = FALSE)
+      }
+    }
   }
 
   # --- One-way path ---------------------------------------------------------
@@ -355,7 +369,9 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
   # Compute per-category means if mean= is specified
   mean_info_ow <- NULL
   if (has_mean) {
-    mean_info_ow <- .compute_oneway_means(vec, mean_vec, tab_df, var_type)
+    mean_info_ow <- .compute_oneway_multi_means(
+      vec, mean_list, tab_df, var_type, listwise = isTRUE(listwise)
+    )
   }
 
   # Construct and return the S3 object
@@ -371,28 +387,79 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
     missing          = missing,
     value            = isTRUE(value),
     label            = isTRUE(label),
-    mean_vals        = if (!is.null(mean_info_ow)) mean_info_ow$mean_vals else NULL,
-    n_vals           = if (!is.null(mean_info_ow)) mean_info_ow$n_vals else NULL,
-    mean_name        = if (has_mean) mean_name else NULL,
-    mean_label       = if (has_mean) mean_label else NULL,
-    mean_grand       = if (!is.null(mean_info_ow)) {
-      list(mean = mean_info_ow$mean_total, n = mean_info_ow$n_total)
+    mean_mat         = if (!is.null(mean_info_ow)) mean_info_ow$mean_mat else NULL,
+    n_mat            = if (!is.null(mean_info_ow)) mean_info_ow$n_mat else NULL,
+    mean_names       = if (has_mean) mean_names else NULL,
+    mean_labels      = if (has_mean) mean_labels else NULL,
+    mean_grands      = if (!is.null(mean_info_ow)) {
+      list(means = mean_info_ow$mean_totals, ns = mean_info_ow$n_totals)
     } else NULL
   )
 }
 
 
 # ---------------------------------------------------------------------------
-# One-way S3 constructor and print method (unchanged)
+# Helper: resolve mean= argument into a uniform list structure.
+#
+# Handles both single-variable (mean = mpg) and multi-variable
+# (mean = c(mpg, wt)) syntax via NSE.  Returns a list with:
+#   $vecs   - named list of numeric vectors
+#   $names  - character vector of variable names
+#   $labels - character vector (NA where no haven label)
+# ---------------------------------------------------------------------------
+.resolve_mean_args <- function(mean_expr, mean_val, data, enclos) {
+  # Determine argument expressions: either c(a, b, ...) or a single symbol/call
+  if (is.call(mean_expr) && identical(mean_expr[[1L]], quote(c))) {
+    # c(var1, var2, ...): iterate over arguments
+    arg_exprs <- as.list(mean_expr)[-1L]  # drop the 'c'
+  } else {
+    # Single variable
+    arg_exprs <- list(mean_expr)
+  }
+
+  vecs   <- vector("list", length(arg_exprs))
+  names_ <- character(length(arg_exprs))
+  labels <- character(length(arg_exprs))
+
+  for (k in seq_along(arg_exprs)) {
+    expr_k <- arg_exprs[[k]]
+    if (!is.null(data)) {
+      v <- eval(expr_k, envir = data, enclos = enclos)
+      nm <- deparse(expr_k)
+    } else {
+      # Direct vector call: mean = c(df$mpg, df$wt) — eval in parent frame
+      v  <- eval(expr_k, envir = enclos)
+      nm <- .extract_var_name(expr_k)
+    }
+
+    # Validate: must be numeric
+    if (!is.numeric(v)) {
+      stop(sprintf("tulatab(): mean variable '%s' must be numeric.", nm),
+           call. = FALSE)
+    }
+
+    vecs[[k]]   <- v
+    names_[k]   <- nm
+    lbl <- attr(v, "label", exact = TRUE)
+    labels[k]   <- if (!is.null(lbl) && nzchar(lbl)) lbl else NA_character_
+  }
+
+  names(vecs) <- names_
+  list(vecs = vecs, names = names_, labels = labels)
+}
+
+
+# ---------------------------------------------------------------------------
+# One-way S3 constructor and print method
 # ---------------------------------------------------------------------------
 
 # Internal constructor for tula_tab S3 objects.
 new_tula_tab <- function(tab_df, var_name, var_type, show_cum,
                          has_haven_labels, has_haven_values,
                          var_label, width, missing, value, label,
-                         mean_vals = NULL, n_vals = NULL,
-                         mean_name = NULL, mean_label = NULL,
-                         mean_grand = NULL) {
+                         mean_mat = NULL, n_mat = NULL,
+                         mean_names = NULL, mean_labels = NULL,
+                         mean_grands = NULL) {
   structure(
     list(
       tab_df           = tab_df,
@@ -406,11 +473,11 @@ new_tula_tab <- function(tab_df, var_name, var_type, show_cum,
       missing          = missing,
       value            = value,
       label            = label,
-      mean_vals        = mean_vals,
-      n_vals           = n_vals,
-      mean_name        = mean_name,
-      mean_label       = mean_label,
-      mean_grand       = mean_grand
+      mean_mat         = mean_mat,
+      n_mat            = n_mat,
+      mean_names       = mean_names,
+      mean_labels      = mean_labels,
+      mean_grands      = mean_grands
     ),
     class = "tula_tab"
   )

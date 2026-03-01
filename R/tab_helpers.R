@@ -430,6 +430,64 @@
 }
 
 
+# Compute per-category means and Ns for one-way mean= mode with multiple
+# mean variables and listwise deletion support.
+#
+# Returns a list with:
+#   mean_mat    - numeric matrix (nrow = nrow(tab_df), ncol = n_vars)
+#   n_mat       - integer matrix (same dims)
+#   mean_totals - numeric vector (one grand mean per variable)
+#   n_totals    - integer vector (one grand N per variable)
+.compute_oneway_multi_means <- function(vec, mean_list, tab_df, var_type,
+                                         listwise = TRUE) {
+  n_vars <- length(mean_list)
+  n_rows <- nrow(tab_df)
+
+  # Build a complete-cases mask when listwise = TRUE
+  if (listwise && n_vars > 1L) {
+    complete <- rep(TRUE, length(vec))
+    for (k in seq_len(n_vars)) {
+      complete <- complete & !is.na(mean_list[[k]])
+    }
+  } else {
+    complete <- NULL
+  }
+
+  mean_mat <- matrix(NA_real_, nrow = n_rows, ncol = n_vars)
+  n_mat    <- matrix(0L,       nrow = n_rows, ncol = n_vars)
+  mean_totals <- rep(NA_real_, n_vars)
+  n_totals    <- rep(0L, n_vars)
+
+  for (k in seq_len(n_vars)) {
+    mv <- mean_list[[k]]
+
+    # Apply listwise mask: set values to NA where any variable is missing
+    if (!is.null(complete)) {
+      mv_use <- ifelse(complete, mv, NA_real_)
+    } else {
+      mv_use <- mv
+    }
+
+    # Compute per-group via the existing single-variable helper's logic
+    info_k <- .compute_oneway_means(vec, mv_use, tab_df, var_type)
+    mean_mat[, k] <- info_k$mean_vals
+    n_mat[, k]    <- info_k$n_vals
+    mean_totals[k] <- info_k$mean_total
+    n_totals[k]    <- info_k$n_total
+  }
+
+  colnames(mean_mat) <- names(mean_list)
+  colnames(n_mat)    <- names(mean_list)
+
+  list(
+    mean_mat    = mean_mat,
+    n_mat       = n_mat,
+    mean_totals = mean_totals,
+    n_totals    = n_totals
+  )
+}
+
+
 # Format a frequency count with commas, right-aligned.
 .fmt_freq <- function(n, width = 10L) {
   if (is.na(n)) return(strrep(" ", width))
@@ -458,7 +516,7 @@
   width    <- .resolve_width(tab_obj$width)
 
   # --- Mean mode: completely different column layout -------------------------
-  mean_mode <- !is.null(tab_obj$mean_vals)
+  mean_mode <- !is.null(tab_obj$mean_mat)
   if (mean_mode) return(.format_tab_mean_table(tab_obj, tab_df, width))
 
   # Fixed column widths
@@ -619,57 +677,99 @@
 
 # Format a one-way tab table in mean mode (Mean + N columns).
 #
+# Supports both single-variable (backward-compatible) and multi-variable
+# mean modes.  When ncol(mean_mat) == 1, produces the classic layout with
+# "Mean of ..." header.  When ncol > 1, adds a "Means" super-header row
+# above per-variable column names.
+#
 # Called from .format_tab_table() when mean_mode is detected.
 # Returns a character vector of output lines.
 .format_tab_mean_table <- function(tab_obj, tab_df, width) {
-  mean_vals  <- tab_obj$mean_vals
-  n_vals     <- tab_obj$n_vals
-  mean_grand <- tab_obj$mean_grand
+  mean_mat    <- tab_obj$mean_mat      # matrix: nrow(tab_df) x n_vars
+  n_mat       <- tab_obj$n_mat         # matrix: same dims
+  mean_names  <- tab_obj$mean_names    # character vector
+  mean_labels <- tab_obj$mean_labels   # character vector (NA = no label)
+  mean_grands <- tab_obj$mean_grands   # list(means = numeric, ns = integer)
 
-  # --- Format all mean values to determine column widths --------------------
-  # Use .fmt_sum() (scalar) for each value
-  all_mean_strings <- character(nrow(tab_df))
-  for (i in seq_len(nrow(tab_df))) {
-    if (is.na(mean_vals[i])) {
-      all_mean_strings[i] <- ""
-    } else {
-      all_mean_strings[i] <- trimws(.fmt_sum(mean_vals[i], digits = 7L, width = 1L))
+  n_vars  <- ncol(mean_mat)
+  n_rows  <- nrow(tab_df)
+  multi   <- n_vars > 1L
+
+  # --- Detect whether all Ns are identical across variables -----------------
+  # When listwise=TRUE (or single variable), all N columns are identical.
+  # In that case, show only one N column at the far right.
+  shared_n <- multi && .all_n_cols_equal(n_mat, mean_grands$ns)
+
+  # --- Per-variable display names -------------------------------------------
+  var_displays <- character(n_vars)
+  for (k in seq_len(n_vars)) {
+    lbl <- mean_labels[k]
+    var_displays[k] <- if (!is.na(lbl) && nzchar(lbl)) lbl else mean_names[k]
+  }
+
+  # --- Pre-format all mean and N strings ------------------------------------
+  mean_strs <- matrix("", nrow = n_rows, ncol = n_vars)
+  n_strs    <- matrix("", nrow = n_rows, ncol = n_vars)
+  total_mean_strs <- character(n_vars)
+  total_n_strs    <- character(n_vars)
+
+  for (k in seq_len(n_vars)) {
+    for (i in seq_len(n_rows)) {
+      mean_strs[i, k] <- if (is.na(mean_mat[i, k])) "" else
+        trimws(.fmt_sum(mean_mat[i, k], digits = 7L, width = 1L))
+      n_strs[i, k] <- formatC(as.integer(n_mat[i, k]),
+                               format = "d", big.mark = ",")
     }
+    total_mean_strs[k] <- if (is.na(mean_grands$means[k])) "" else
+      trimws(.fmt_sum(mean_grands$means[k], digits = 7L, width = 1L))
+    total_n_strs[k] <- formatC(as.integer(mean_grands$ns[k]),
+                                format = "d", big.mark = ",")
   }
-  # Total row mean
-  total_mean_str <- if (is.na(mean_grand$mean)) {
-    ""
+
+  # --- Column widths --------------------------------------------------------
+  cw_mean <- integer(n_vars)
+  for (k in seq_len(n_vars)) {
+    hdr_text <- if (multi) mean_names[k] else "Mean"
+    cw_mean[k] <- max(
+      nchar(mean_strs[, k]),
+      nchar(total_mean_strs[k]),
+      nchar(hdr_text),
+      6L,
+      na.rm = TRUE
+    ) + 2L
+  }
+
+  if (shared_n) {
+    # Single N column: width based on rightmost variable's N values (all same)
+    cw_shared_n <- max(
+      nchar(n_strs[, n_vars]),
+      nchar(total_n_strs[n_vars]),
+      nchar("N"),
+      4L,
+      na.rm = TRUE
+    ) + 2L
+
+    # Layout: pipe(2) + mean1 + '  ' + mean2 + ... + ' ' + N
+    num_w <- sum(cw_mean) + (n_vars - 1L) * 2L + 1L + cw_shared_n
   } else {
-    trimws(.fmt_sum(mean_grand$mean, digits = 7L, width = 1L))
+    # Per-variable N columns
+    cw_n <- integer(n_vars)
+    for (k in seq_len(n_vars)) {
+      cw_n[k] <- max(
+        nchar(n_strs[, k]),
+        nchar(total_n_strs[k]),
+        nchar("N"),
+        4L,
+        na.rm = TRUE
+      ) + 2L
+    }
+
+    # Layout: pipe(2) + [mean1 + ' ' + n1] + '  ' + [mean2 + ' ' + n2] + ...
+    per_var_w <- cw_mean + 1L + cw_n
+    num_w     <- sum(per_var_w) + (n_vars - 1L) * 2L
   }
 
-  # Format all N values
-  all_n_strings <- character(nrow(tab_df))
-  for (i in seq_len(nrow(tab_df))) {
-    all_n_strings[i] <- formatC(as.integer(n_vals[i]), format = "d", big.mark = ",")
-  }
-  total_n_str <- formatC(as.integer(mean_grand$n), format = "d", big.mark = ",")
-
-  # --- Column widths -------------------------------------------------------
-  cw_mean <- max(
-    nchar(all_mean_strings),
-    nchar(total_mean_str),
-    nchar("Mean"),
-    6L,
-    na.rm = TRUE
-  ) + 2L   # 2 chars padding
-
-  cw_n <- max(
-    nchar(all_n_strings),
-    nchar(total_n_str),
-    nchar("N"),
-    4L,
-    na.rm = TRUE
-  ) + 2L   # 2 chars padding
-
-  # Numeric portion: " |" (pipe_w) + cw_mean + " " + cw_n
   pipe_w      <- 2L
-  num_w       <- cw_mean + 1L + cw_n
   total_num_w <- pipe_w + num_w
 
   # --- Label column width ---------------------------------------------------
@@ -698,33 +798,60 @@
   lbl_w           <- total_width - total_num_w
   if (lbl_w < 5L) lbl_w <- 5L
 
-  # --- "Mean of ..." header line -------------------------------------------
-  mean_display <- if (!is.null(tab_obj$mean_label) && nzchar(tab_obj$mean_label)) {
-    tab_obj$mean_label
-  } else {
-    tab_obj$mean_name
-  }
-  mean_hdr_line <- paste0("Mean of ", mean_display)
-
-  # --- Separator and column header ------------------------------------------
+  # --- Header lines ---------------------------------------------------------
   sep_line <- paste0(char_rep(.BOX_H, lbl_w + 1L), .BOX_CROSS,
                      char_rep(.BOX_H, num_w))
 
-  var_hdr <- .truncate_tab_label(var_display, lbl_w)
-  hdr_line <- sprintf(
-    paste0("%s ", .BOX_V, "%s %s"),
-    pad_left(var_hdr, lbl_w),
-    pad_left("Mean", cw_mean),
-    pad_left("N", cw_n)
-  )
+  if (multi) {
+    # Multi-variable: "Means" super-header + per-variable column names
+    super_padded <- .center_text("Means", num_w)
+    super_line <- paste0(strrep(" ", lbl_w + 1L), .BOX_V, super_padded)
 
-  lines <- c(mean_hdr_line, sep_line, hdr_line, sep_line)
+    var_hdr <- .truncate_tab_label(var_display, lbl_w)
+
+    if (shared_n) {
+      # mean1  mean2  ...  N
+      col_parts <- vapply(seq_len(n_vars), function(k)
+        pad_left(mean_names[k], cw_mean[k]), character(1L))
+      col_data <- paste0(paste(col_parts, collapse = "  "),
+                          " ", pad_left("N", cw_shared_n))
+    } else {
+      # mean1  N  mean2  N  ...
+      col_parts <- character(n_vars)
+      for (k in seq_len(n_vars)) {
+        col_parts[k] <- paste0(pad_left(mean_names[k], cw_mean[k]),
+                                " ", pad_left("N", cw_n[k]))
+      }
+      col_data <- paste(col_parts, collapse = "  ")
+    }
+    hdr_line <- paste0(pad_left(var_hdr, lbl_w), " ", .BOX_V, col_data)
+
+    lines <- c(super_line, hdr_line, sep_line)
+  } else {
+    # Single-variable: classic "Mean of ..." header
+    mean_display <- var_displays[1L]
+    mean_hdr_line <- paste0("Mean of ", mean_display)
+
+    cw_n_single <- max(
+      nchar(n_strs[, 1L]),
+      nchar(total_n_strs[1L]),
+      nchar("N"),
+      4L,
+      na.rm = TRUE
+    ) + 2L
+
+    var_hdr <- .truncate_tab_label(var_display, lbl_w)
+    hdr_line <- paste0(pad_left(var_hdr, lbl_w), " ", .BOX_V,
+                       pad_left("Mean", cw_mean[1L]), " ",
+                       pad_left("N", cw_n_single))
+
+    lines <- c(mean_hdr_line, sep_line, hdr_line, sep_line)
+  }
 
   # --- Data rows ------------------------------------------------------------
-  for (i in seq_len(nrow(tab_df))) {
+  for (i in seq_len(n_rows)) {
     row <- tab_df[i, ]
 
-    # Build display label (same logic as normal mode)
     display_lbl <- row$value
     if (tab_obj$var_type %in% c("factor", "ordered", "character")) {
       display_lbl <- paste0("  ", display_lbl)
@@ -739,11 +866,24 @@
       lbl_fmt <- pad_right(display_lbl, lbl_w)
     }
 
-    mean_fmt <- pad_left(all_mean_strings[i], cw_mean)
-    n_fmt    <- pad_left(all_n_strings[i], cw_n)
+    if (multi && shared_n) {
+      mean_parts <- vapply(seq_len(n_vars), function(k)
+        pad_left(mean_strs[i, k], cw_mean[k]), character(1L))
+      data_str <- paste0(paste(mean_parts, collapse = "  "),
+                          " ", pad_left(n_strs[i, n_vars], cw_shared_n))
+    } else if (multi) {
+      data_parts <- character(n_vars)
+      for (k in seq_len(n_vars)) {
+        data_parts[k] <- paste0(pad_left(mean_strs[i, k], cw_mean[k]),
+                                 " ", pad_left(n_strs[i, k], cw_n[k]))
+      }
+      data_str <- paste(data_parts, collapse = "  ")
+    } else {
+      data_str <- paste0(pad_left(mean_strs[i, 1L], cw_mean[1L]),
+                          " ", pad_left(n_strs[i, 1L], cw_n_single))
+    }
 
-    line <- sprintf(paste0("%s ", .BOX_V, "%s %s"), lbl_fmt, mean_fmt, n_fmt)
-    lines <- c(lines, line)
+    lines <- c(lines, paste0(lbl_fmt, " ", .BOX_V, data_str))
   }
 
   # --- Separator before total -----------------------------------------------
@@ -751,12 +891,48 @@
 
   # --- Total row ------------------------------------------------------------
   total_lbl <- pad_left("Total", lbl_w)
-  total_mean_fmt <- pad_left(total_mean_str, cw_mean)
-  total_n_fmt    <- pad_left(total_n_str, cw_n)
 
-  total_line <- sprintf(paste0("%s ", .BOX_V, "%s %s"),
-                        total_lbl, total_mean_fmt, total_n_fmt)
-  lines <- c(lines, total_line)
+  if (multi && shared_n) {
+    mean_parts <- vapply(seq_len(n_vars), function(k)
+      pad_left(total_mean_strs[k], cw_mean[k]), character(1L))
+    total_str <- paste0(paste(mean_parts, collapse = "  "),
+                         " ", pad_left(total_n_strs[n_vars], cw_shared_n))
+  } else if (multi) {
+    total_parts <- character(n_vars)
+    for (k in seq_len(n_vars)) {
+      total_parts[k] <- paste0(pad_left(total_mean_strs[k], cw_mean[k]),
+                                " ", pad_left(total_n_strs[k], cw_n[k]))
+    }
+    total_str <- paste(total_parts, collapse = "  ")
+  } else {
+    total_str <- paste0(pad_left(total_mean_strs[1L], cw_mean[1L]),
+                         " ", pad_left(total_n_strs[1L], cw_n_single))
+  }
+
+  lines <- c(lines, paste0(total_lbl, " ", .BOX_V, total_str))
 
   lines
+}
+
+
+# Check whether all N columns in the matrix are identical (and grand Ns match).
+.all_n_cols_equal <- function(n_mat, grand_ns) {
+  if (ncol(n_mat) <= 1L) return(FALSE)
+  ref_col <- n_mat[, 1L]
+  ref_grand <- grand_ns[1L]
+  for (k in 2L:ncol(n_mat)) {
+    if (!identical(as.integer(n_mat[, k]), as.integer(ref_col))) return(FALSE)
+    if (grand_ns[k] != ref_grand) return(FALSE)
+  }
+  TRUE
+}
+
+
+# Center text within a given width, padding with spaces.
+.center_text <- function(text, width) {
+  n <- nchar(text)
+  if (n >= width) return(text)
+  left_pad  <- (width - n) %/% 2L
+  right_pad <- width - n - left_pad
+  paste0(strrep(" ", left_pad), text, strrep(" ", right_pad))
 }
