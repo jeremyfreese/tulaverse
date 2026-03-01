@@ -4,7 +4,8 @@
 .RData
 .Ruserdata
 
-# Rendered output from test scripts
+# Test scripts and their rendered output
+*_test.qmd
 *.html
 *_files/
 
