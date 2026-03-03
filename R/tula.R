@@ -77,6 +77,11 @@
 #'   Stata-inspired codebook output (per-variable blocks with type, range,
 #'   unique values, and tabulations or percentile distributions) instead of
 #'   the default summary table. Default `FALSE`. Ignored for regression output.
+#' @param data Optional data frame. When supplied, `model` is treated as an
+#'   unquoted variable name (or `c()` of names) evaluated inside `data`.
+#'   For example, `tula(height, data = df)` or
+#'   `tula(c(height, weight), data = df)`. Only used for the
+#'   summarize / codebook path; ignored for regression models.
 #' @param ... Additional arguments passed to model-specific methods.
 #'
 #' @return For regression models, invisibly returns a `tula_output` object.
@@ -95,6 +100,9 @@
 #' tula(mtcars)
 #' tula(mtcars, sep = 3, median = TRUE)
 #'
+#' tula(mpg, data = mtcars)
+#' tula(c(mpg, wt, hp), data = mtcars)
+#'
 #' @export
 tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  width = NULL, sep = 5L, mad = FALSE, median = FALSE,
@@ -102,7 +110,21 @@ tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
                  robust = FALSE, vcov = NULL, cluster = NULL,
                  codebook = FALSE,
                  select = NULL, selectheader = FALSE,
-                 selectfooter = FALSE, ...) {
+                 selectfooter = FALSE,
+                 data = NULL, ...) {
+
+  # --- data= path: resolve NSE, build df, route to summarize/codebook ------
+  if (!is.null(data)) {
+    model_expr <- substitute(model)
+    resolved_df <- .resolve_tula_data(model_expr, data, parent.frame())
+    if (isTRUE(codebook)) {
+      return(.tula_codebook(resolved_df, width = width))
+    }
+    return(.tula_summarize(resolved_df, width = width, sep = sep,
+                            mad = mad, median = median, digits = digits))
+  }
+
+  # --- Standard S3 dispatch ------------------------------------------------
   # Capture the expression used for `model` before dispatch, so that vector
   # methods can display a meaningful variable name (e.g. "mtcars$mpg").
   .tula_call_nm <- deparse(substitute(model))
@@ -156,6 +178,47 @@ tula.data.frame <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   }
   .tula_summarize(model, width = width, sep = sep, mad = mad, median = median,
                   digits = digits)
+}
+
+
+# ---------------------------------------------------------------------------
+# .resolve_tula_data() — NSE helper for the data= path
+#
+# Evaluates the user's model expression inside `data` and returns a named
+# data frame.  Supports both single names (tula(height, data = df)) and
+# c() syntax (tula(c(height, weight), data = df)).
+#
+# The design intentionally mirrors .resolve_mean_args() in tab_helpers.R
+# and leaves room for a future formula branch (~ height + weight).
+# ---------------------------------------------------------------------------
+.resolve_tula_data <- function(model_expr, data, enclos) {
+  # Detect c() syntax: tula(c(height, weight), data = df)
+  if (is.call(model_expr) && identical(model_expr[[1L]], quote(c))) {
+    arg_exprs <- as.list(model_expr)[-1L]   # drop the 'c'
+  } else {
+    arg_exprs <- list(model_expr)
+  }
+
+  cols <- vector("list", length(arg_exprs))
+  nms  <- character(length(arg_exprs))
+
+  for (k in seq_along(arg_exprs)) {
+    expr_k <- arg_exprs[[k]]
+    v      <- eval(expr_k, envir = data, enclos = enclos)
+    nms[k] <- deparse(expr_k)
+    cols[[k]] <- v
+  }
+
+  df <- stats::setNames(cols, nms)
+  df <- as.data.frame(df, stringsAsFactors = FALSE)
+
+  # Preserve factor class and haven-labelled class (as.data.frame can strip)
+  for (k in seq_along(cols)) {
+    if (is.factor(cols[[k]]) || inherits(cols[[k]], "haven_labelled")) {
+      df[[nms[k]]] <- cols[[k]]
+    }
+  }
+  df
 }
 
 
