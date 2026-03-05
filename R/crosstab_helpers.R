@@ -490,7 +490,7 @@
 
   # Resolve dec: NULL -> 2 for pct, 3 for mean
   pct_dec  <- if (!is.null(ct_obj$dec)) ct_obj$dec else 2L
-  mean_dec <- if (!is.null(ct_obj$dec)) ct_obj$dec else 3L
+  mean_dec <- ct_obj$dec   # NULL when user didn't set dec= (smart formatting)
 
   if (mean_mode) {
     pct_mode  <- NULL
@@ -669,7 +669,7 @@
                                    n_col_marginals = NULL,
                                    mean_grand = NULL,
                                    n_grand = NULL,
-                                   mean_dec = 3L) {
+                                   mean_dec = NULL) {
 
   n_panel <- length(panel_cols)
   n_rows  <- nrow(ct_mat)

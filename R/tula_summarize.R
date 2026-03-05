@@ -341,20 +341,25 @@ format_summary_table <- function(rows, opts, total_width) {
 # so large round-ish numbers (e.g. 75000) don't sprout trailing zeros.
 # ---------------------------------------------------------------------------
 
-.fmt_sum <- function(x, digits = 7L, width = 10L, dec = 3L) {
+.fmt_sum <- function(x, digits = 7L, width = 10L, dec = NULL) {
   if (is.na(x)) return(strrep(" ", width))
 
-  if (abs(x) > 0.1) {
-    # How many decimal places does the g-format want?
+  if (!is.null(dec)) {
+    # Explicit decimal cap requested (e.g. tulatab dec= option):
+    # always use fixed-format with exactly `dec` decimal places.
+    s <- sprintf("%.*f", dec, x)
+  } else if (abs(x) > 0.1) {
+    # Smart mode (summarize path): cap at 3 decimal places for larger values
     g_str    <- formatC(x, digits = digits, format = "g", flag = " ")
     g_dp     <- if (grepl("\\.", g_str)) {
       nchar(sub(".*\\.", "", trimws(g_str)))
     } else {
       0L
     }
-    dp       <- min(dec, g_dp)
+    dp       <- min(3L, g_dp)
     s        <- sprintf("%.*f", dp, x)
   } else {
+    # Smart mode: significant-digit formatting for small values
     s <- formatC(x, digits = digits, format = "g", flag = " ")
     s <- trimws(s)
   }

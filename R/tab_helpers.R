@@ -517,7 +517,7 @@
 
   # Resolve dec: NULL -> 2 for pct, 3 for mean
   pct_dec  <- if (!is.null(tab_obj$dec)) tab_obj$dec else 2L
-  mean_dec <- if (!is.null(tab_obj$dec)) tab_obj$dec else 3L
+  mean_dec <- tab_obj$dec   # NULL when user didn't set dec= (smart formatting)
 
   # --- Mean mode: completely different column layout -------------------------
   mean_mode <- !is.null(tab_obj$mean_mat)
@@ -688,7 +688,7 @@
 #
 # Called from .format_tab_table() when mean_mode is detected.
 # Returns a character vector of output lines.
-.format_tab_mean_table <- function(tab_obj, tab_df, width, dec = 3L) {
+.format_tab_mean_table <- function(tab_obj, tab_df, width, dec = NULL) {
   mean_mat    <- tab_obj$mean_mat      # matrix: nrow(tab_df) x n_vars
   n_mat       <- tab_obj$n_mat         # matrix: same dims
   mean_names  <- tab_obj$mean_names    # character vector
