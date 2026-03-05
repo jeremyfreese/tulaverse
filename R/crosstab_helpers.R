@@ -488,6 +488,10 @@
   # Mean mode: when mean_mat is non-NULL, display means + Ns instead of freq + pct
   mean_mode  <- !is.null(ct_obj$mean_mat)
 
+  # Resolve dec: NULL -> 2 for pct, 3 for mean
+  pct_dec  <- if (!is.null(ct_obj$dec)) ct_obj$dec else 2L
+  mean_dec <- if (!is.null(ct_obj$dec)) ct_obj$dec else 3L
+
   if (mean_mode) {
     pct_mode  <- NULL
     show_freq <- FALSE
@@ -539,7 +543,7 @@
                    ct_obj$mean_grand)
     all_means <- all_means[!is.na(all_means)]
     mean_w <- if (length(all_means) > 0L) {
-      max(vapply(all_means, function(v) nchar(trimws(.fmt_sum(v, digits = 7L, width = 1L))), integer(1L)))
+      max(vapply(all_means, function(v) nchar(trimws(.fmt_sum(v, digits = 7L, width = 1L, dec = mean_dec))), integer(1L)))
     } else {
       1L
     }
@@ -558,7 +562,7 @@
                     as.integer(col_totals), as.integer(grand_total))
     max_count <- max(abs(all_counts), 1L)
     freq_w <- nchar(formatC(max_count, format = "d", big.mark = ","))
-    pct_w  <- 6L   # "100.00"
+    pct_w  <- if (pct_dec > 0L) 4L + pct_dec else 3L   # e.g. "100.00" = 6
 
     cell_w <- max(freq_w, pct_w)
   }
@@ -626,6 +630,7 @@
       col_display  = col_display,
       pct_mode     = pct_mode,
       show_freq    = show_freq,
+      pct_dec      = pct_dec,
       mean_mode    = mean_mode,
       mean_mat     = ct_obj$mean_mat,
       n_mat        = ct_obj$n_mat,
@@ -634,7 +639,8 @@
       mean_col_marginals = ct_obj$mean_col_marginals,
       n_col_marginals    = ct_obj$n_col_marginals,
       mean_grand         = ct_obj$mean_grand,
-      n_grand            = ct_obj$n_grand
+      n_grand            = ct_obj$n_grand,
+      mean_dec           = mean_dec
     )
 
     if (p > 1L) lines <- c(lines, "")
@@ -654,6 +660,7 @@
                                    total_row_total_pct,
                                    row_lbl_w, cw_data, row_hdr_lines,
                                    col_display, pct_mode, show_freq,
+                                   pct_dec = 2L,
                                    mean_mode = FALSE,
                                    mean_mat = NULL, n_mat = NULL,
                                    mean_row_marginals = NULL,
@@ -661,7 +668,8 @@
                                    mean_col_marginals = NULL,
                                    n_col_marginals = NULL,
                                    mean_grand = NULL,
-                                   n_grand = NULL) {
+                                   n_grand = NULL,
+                                   mean_dec = 3L) {
 
   n_panel <- length(panel_cols)
   n_rows  <- nrow(ct_mat)
@@ -737,12 +745,12 @@
       # --- Mean mode: mean line + N line ---
       mean_parts <- vapply(panel_cols, function(j) {
         val <- mean_mat[i, j]
-        if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data)
+        if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data, dec = mean_dec)
       }, character(1))
       mean_data <- paste(mean_parts, collapse = "  ")
       # Row marginal mean in total column
       row_m <- mean_row_marginals[i]
-      mean_total <- if (is.na(row_m)) pad_left("", cw_data) else .fmt_sum(row_m, digits = 7L, width = cw_data)
+      mean_total <- if (is.na(row_m)) pad_left("", cw_data) else .fmt_sum(row_m, digits = 7L, width = cw_data, dec = mean_dec)
       data_lines <- c(data_lines, paste0(row_lbl, " ", .BOX_V, mean_data, " ", .BOX_V, mean_total))
 
       # N line
@@ -769,10 +777,10 @@
       # Percentage line
       if (!is.null(pct_mode)) {
         pct_parts <- vapply(panel_cols, function(j) {
-          pad_left(sprintf("%.2f", pct_mat[i, j]), cw_data)
+          pad_left(sprintf("%.*f", pct_dec, pct_mat[i, j]), cw_data)
         }, character(1))
         pct_data <- paste(pct_parts, collapse = "  ")
-        pct_total_val <- if (!is.null(total_col_pct)) sprintf("%.2f", total_col_pct[i]) else ""
+        pct_total_val <- if (!is.null(total_col_pct)) sprintf("%.*f", pct_dec, total_col_pct[i]) else ""
         pct_total <- pad_left(pct_total_val, cw_data)
 
         lbl <- if (show_freq) blank_lbl else row_lbl
@@ -805,10 +813,10 @@
     # Mean total row: column marginal means + grand mean
     mean_parts <- vapply(panel_cols, function(j) {
       val <- mean_col_marginals[j]
-      if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data)
+      if (is.na(val)) pad_left("", cw_data) else .fmt_sum(val, digits = 7L, width = cw_data, dec = mean_dec)
     }, character(1))
     mean_data <- paste(mean_parts, collapse = "  ")
-    grand_m <- if (is.na(mean_grand)) pad_left("", cw_data) else .fmt_sum(mean_grand, digits = 7L, width = cw_data)
+    grand_m <- if (is.na(mean_grand)) pad_left("", cw_data) else .fmt_sum(mean_grand, digits = 7L, width = cw_data, dec = mean_dec)
     total_data_lines <- c(total_data_lines,
                           paste0(total_lbl, " ", .BOX_V, mean_data, " ", .BOX_V, grand_m))
 
@@ -836,10 +844,10 @@
 
     if (!is.null(pct_mode)) {
       pct_parts <- vapply(panel_cols, function(j) {
-        pad_left(sprintf("%.2f", total_row_pct[j]), cw_data)
+        pad_left(sprintf("%.*f", pct_dec, total_row_pct[j]), cw_data)
       }, character(1))
       pct_data <- paste(pct_parts, collapse = "  ")
-      pct_total <- pad_left(sprintf("%.2f", total_row_total_pct), cw_data)
+      pct_total <- pad_left(sprintf("%.*f", pct_dec, total_row_total_pct), cw_data)
 
       lbl <- if (show_freq) blank_lbl else total_lbl
       total_data_lines <- c(total_data_lines,

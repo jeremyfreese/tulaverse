@@ -341,7 +341,7 @@ format_summary_table <- function(rows, opts, total_width) {
 # so large round-ish numbers (e.g. 75000) don't sprout trailing zeros.
 # ---------------------------------------------------------------------------
 
-.fmt_sum <- function(x, digits = 7L, width = 10L) {
+.fmt_sum <- function(x, digits = 7L, width = 10L, dec = 3L) {
   if (is.na(x)) return(strrep(" ", width))
 
   if (abs(x) > 0.1) {
@@ -352,7 +352,7 @@ format_summary_table <- function(rows, opts, total_width) {
     } else {
       0L
     }
-    dp       <- min(3L, g_dp)
+    dp       <- min(dec, g_dp)
     s        <- sprintf("%.*f", dp, x)
   } else {
     s <- formatC(x, digits = digits, format = "g", flag = " ")

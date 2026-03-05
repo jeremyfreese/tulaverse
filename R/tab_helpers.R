@@ -496,10 +496,10 @@
 }
 
 
-# Format a percentage with exactly 2 decimal places, right-aligned.
-.fmt_pct <- function(x, width = 10L) {
+# Format a percentage with a specified number of decimal places, right-aligned.
+.fmt_pct <- function(x, width = 10L, dec = 2L) {
   if (is.na(x)) return(strrep(" ", width))
-  formatted <- sprintf("%.2f", x)
+  formatted <- sprintf("%.*f", dec, x)
   formatC(formatted, width = width, flag = " ")
 }
 
@@ -515,9 +515,13 @@
   show_cum <- tab_obj$show_cum
   width    <- .resolve_width(tab_obj$width)
 
+  # Resolve dec: NULL -> 2 for pct, 3 for mean
+  pct_dec  <- if (!is.null(tab_obj$dec)) tab_obj$dec else 2L
+  mean_dec <- if (!is.null(tab_obj$dec)) tab_obj$dec else 3L
+
   # --- Mean mode: completely different column layout -------------------------
   mean_mode <- !is.null(tab_obj$mean_mat)
-  if (mean_mode) return(.format_tab_mean_table(tab_obj, tab_df, width))
+  if (mean_mode) return(.format_tab_mean_table(tab_obj, tab_df, width, dec = mean_dec))
 
   # Fixed column widths
   cw_freq <- 10L
@@ -630,15 +634,15 @@
         paste0("%s ", .BOX_V, "%s %s %s"),
         lbl_fmt,
         .fmt_freq(row$freq, cw_freq),
-        .fmt_pct(row$percent, cw_pct),
-        .fmt_pct(row$cum, cw_cum)
+        .fmt_pct(row$percent, cw_pct, dec = pct_dec),
+        .fmt_pct(row$cum, cw_cum, dec = pct_dec)
       )
     } else {
       line <- sprintf(
         paste0("%s ", .BOX_V, "%s %s"),
         lbl_fmt,
         .fmt_freq(row$freq, cw_freq),
-        .fmt_pct(row$percent, cw_pct)
+        .fmt_pct(row$percent, cw_pct, dec = pct_dec)
       )
     }
 
@@ -657,15 +661,15 @@
       paste0("%s ", .BOX_V, "%s %s %s"),
       total_lbl,
       .fmt_freq(total_freq, cw_freq),
-      .fmt_pct(100, cw_pct),
-      .fmt_pct(100, cw_cum)
+      .fmt_pct(100, cw_pct, dec = pct_dec),
+      .fmt_pct(100, cw_cum, dec = pct_dec)
     )
   } else {
     total_line <- sprintf(
       paste0("%s ", .BOX_V, "%s %s"),
       total_lbl,
       .fmt_freq(total_freq, cw_freq),
-      .fmt_pct(100, cw_pct)
+      .fmt_pct(100, cw_pct, dec = pct_dec)
     )
   }
 
@@ -684,7 +688,7 @@
 #
 # Called from .format_tab_table() when mean_mode is detected.
 # Returns a character vector of output lines.
-.format_tab_mean_table <- function(tab_obj, tab_df, width) {
+.format_tab_mean_table <- function(tab_obj, tab_df, width, dec = 3L) {
   mean_mat    <- tab_obj$mean_mat      # matrix: nrow(tab_df) x n_vars
   n_mat       <- tab_obj$n_mat         # matrix: same dims
   mean_names  <- tab_obj$mean_names    # character vector
@@ -716,12 +720,12 @@
   for (k in seq_len(n_vars)) {
     for (i in seq_len(n_rows)) {
       mean_strs[i, k] <- if (is.na(mean_mat[i, k])) "" else
-        trimws(.fmt_sum(mean_mat[i, k], digits = 7L, width = 1L))
+        trimws(.fmt_sum(mean_mat[i, k], digits = 7L, width = 1L, dec = dec))
       n_strs[i, k] <- formatC(as.integer(n_mat[i, k]),
                                format = "d", big.mark = ",")
     }
     total_mean_strs[k] <- if (is.na(mean_grands$means[k])) "" else
-      trimws(.fmt_sum(mean_grands$means[k], digits = 7L, width = 1L))
+      trimws(.fmt_sum(mean_grands$means[k], digits = 7L, width = 1L, dec = dec))
     total_n_strs[k] <- formatC(as.integer(mean_grands$ns[k]),
                                 format = "d", big.mark = ",")
   }
