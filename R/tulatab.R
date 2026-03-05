@@ -435,6 +435,9 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
       nm <- .extract_var_name(expr_k)
     }
 
+    # Logical -> integer (treat FALSE=0, TRUE=1)
+    if (is.logical(v)) v <- as.integer(v)
+
     # Validate: must be numeric
     if (!is.numeric(v)) {
       stop(sprintf("tulatab(): mean variable '%s' must be numeric.", nm),
