@@ -29,10 +29,12 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     # Wald-type CIs using model SEs
     ci <- if (wide) {
       z_crit <- stats::qnorm(0.5 + level / 200)
-      cbind(
+      ci_mat <- cbind(
         "2.5 %"  = ct[, "Estimate"] - z_crit * ct[, "Std. Error"],
         "97.5 %" = ct[, "Estimate"] + z_crit * ct[, "Std. Error"]
       )
+      rownames(ci_mat) <- rownames(ct)
+      ci_mat
     } else NULL
   }
 
@@ -236,10 +238,12 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
         .robust_ci(ct_k, level, "t", df = df_k)
       } else {
         z_crit <- stats::qnorm(0.5 + level / 200)
-        cbind(
+        ci_mat <- cbind(
           "2.5 %"  = ct_k[, "Estimate"] - z_crit * ct_k[, "Std. Error"],
           "97.5 %" = ct_k[, "Estimate"] + z_crit * ct_k[, "Std. Error"]
         )
+        rownames(ci_mat) <- rownames(ct_k)
+        ci_mat
       }
     } else NULL
 
