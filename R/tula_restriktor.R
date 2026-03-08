@@ -53,7 +53,7 @@ tula.restriktor <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     lnk <- orig$family$link
     family_label <- paste0("Constrained / Family: ", fam, " / Link: ", lnk)
 
-    ll <- tryCatch(as.numeric(stats::logLik(orig)), error = function(e) NA_real_)
+    ll <- tryCatch(as.numeric(model$loglik), error = function(e) NA_real_)
     dev      <- orig$deviance
     null_dev <- orig$null.deviance
     mcfadden <- if (!is.null(dev) && !is.null(null_dev) && null_dev > 0)
@@ -81,15 +81,17 @@ tula.restriktor <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
     r2_restr <- tryCatch(model$R2.reduced, error = function(e) NULL)
     r2_orig  <- tryCatch(model$R2.org, error = function(e) NULL)
+    ll       <- tryCatch(as.numeric(model$loglik), error = function(e) NULL)
 
     header_left <- c(
-      if (!is.null(r2_orig))  c("R-sq (original)" = r2_orig)
+      if (!is.null(r2_orig))  c("R-sq (original)" = r2_orig),
+      if (!is.null(ll))       c("Log likelihood" = ll)
     )
     header_right <- c(
       "Number of obs" = n_obs,
       if (!is.null(r2_restr)) c("R-sq (constrained)" = r2_restr)
     )
-    value_fmts <- character(0L)
+    value_fmts <- c("Log likelihood" = "f3")
     exp_label  <- NULL
   }
 
