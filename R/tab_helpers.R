@@ -519,6 +519,10 @@
   pct_dec  <- if (!is.null(tab_obj$dec)) tab_obj$dec else 2L
   mean_dec <- tab_obj$dec   # NULL when user didn't set dec= (smart formatting)
 
+  # --- Stat mode: custom stat columns (stat= was specified) ------------------
+  stat_mode <- !is.null(tab_obj$stat_mat)
+  if (stat_mode) return(.format_tab_stat_table(tab_obj, tab_df, width, dec = mean_dec))
+
   # --- Mean mode: completely different column layout -------------------------
   mean_mode <- !is.null(tab_obj$mean_mat)
   if (mean_mode) return(.format_tab_mean_table(tab_obj, tab_df, width, dec = mean_dec))
@@ -939,4 +943,267 @@
   left_pad  <- (width - n) %/% 2L
   right_pad <- width - n - left_pad
   paste0(strrep(" ", left_pad), text, strrep(" ", right_pad))
+}
+
+
+# ---------------------------------------------------------------------------
+# stat= support — parse, compute, and render arbitrary summary statistics
+# ---------------------------------------------------------------------------
+
+# Parse a stat specification into validated tokens.
+#
+# Accepts a single string "mean sd n" (space-separated) or a character
+# vector c("mean", "sd", "n").  Returns a character vector of tokens.
+.parse_stat_tokens <- function(stat) {
+  if (length(stat) == 1L) {
+    tokens <- strsplit(trimws(stat), "\\s+")[[1L]]
+  } else {
+    tokens <- stat
+  }
+
+  valid_base <- c("mean", "median", "n", "sd")
+
+  for (tok in tokens) {
+    if (tok %in% valid_base) next
+    if (grepl("^p\\d{1,2}$", tok)) {
+      pct <- as.integer(sub("^p", "", tok))
+      if (pct >= 1L && pct <= 99L) next
+    }
+    stop(sprintf(
+      "tulatab(): unknown stat '%s'. Valid: mean, median, sd, n, p## (e.g. p25).",
+      tok), call. = FALSE)
+  }
+
+  tokens
+}
+
+
+# Map a stat token to a display column header.
+.stat_display_name <- function(token) {
+  switch(token,
+    mean   = "Mean",
+    median = "Median",
+    sd     = "SD",
+    n      = "N",
+    {
+      if (startsWith(token, "p")) toupper(token) else token
+    }
+  )
+}
+
+
+# Evaluate a single stat on a numeric vector (NA-aware).
+.eval_stat <- function(token, vals) {
+  vals <- vals[!is.na(vals)]
+  n <- length(vals)
+  if (n == 0L && token != "n") return(NA_real_)
+
+  if (token == "mean")   return(mean(vals))
+  if (token == "median") return(stats::median(vals))
+  if (token == "sd")     return(if (n > 1L) stats::sd(vals) else NA_real_)
+  if (token == "n")      return(as.numeric(n))
+  if (startsWith(token, "p")) {
+    pct <- as.numeric(sub("^p", "", token))
+    return(stats::quantile(vals, probs = pct / 100, names = FALSE))
+  }
+  NA_real_
+}
+
+
+# Compute per-category stats for one-way stat= mode.
+#
+# Returns a list with:
+#   stat_mat    - numeric matrix (nrow(tab_df) x n_stats)
+#   stat_grands - numeric vector (one grand stat per token)
+.compute_oneway_stats <- function(vec, stat_vec, tab_df, var_type,
+                                   stat_tokens) {
+  n_rows  <- nrow(tab_df)
+  n_stats <- length(stat_tokens)
+  stat_mat <- matrix(NA_real_, nrow = n_rows, ncol = n_stats)
+  colnames(stat_mat) <- stat_tokens
+
+  # Build grouping key (same approach as .compute_oneway_means)
+  if (var_type == "haven_labelled") {
+    grp_key <- as.character(as.numeric(unclass(vec)))
+  } else if (var_type == "numeric") {
+    grp_key <- as.character(vec)
+  } else {
+    grp_key <- as.character(vec)
+  }
+
+  non_na   <- !is.na(vec)
+  grp_vals <- split(stat_vec[non_na], grp_key[non_na])
+
+  for (i in seq_len(n_rows)) {
+    row <- tab_df[i, ]
+
+    if (row$is_missing) {
+      vals <- stat_vec[is.na(vec)]
+    } else if (var_type %in% c("numeric", "haven_labelled") &&
+               !is.na(row$num_value)) {
+      key  <- as.character(row$num_value)
+      vals <- if (key %in% names(grp_vals)) grp_vals[[key]] else numeric(0)
+    } else {
+      key  <- trimws(row$value)
+      vals <- if (key %in% names(grp_vals)) grp_vals[[key]] else numeric(0)
+    }
+
+    for (k in seq_len(n_stats)) {
+      stat_mat[i, k] <- .eval_stat(stat_tokens[k], vals)
+    }
+  }
+
+  # Grand totals
+  stat_grands <- vapply(stat_tokens, function(tok) {
+    .eval_stat(tok, stat_vec)
+  }, numeric(1L))
+
+  list(stat_mat = stat_mat, stat_grands = stat_grands)
+}
+
+
+# Format a one-way tab table in stat= mode (arbitrary stat columns).
+#
+# Called from .format_tab_table() when stat_mat is present.
+# Returns a character vector of output lines.
+.format_tab_stat_table <- function(tab_obj, tab_df, width, dec = NULL) {
+  stat_mat    <- tab_obj$stat_mat
+  stat_names  <- tab_obj$stat_names     # display names: "Mean", "SD", etc.
+  stat_tokens <- tab_obj$stat_tokens    # raw tokens: "mean", "sd", etc.
+  stat_grands <- tab_obj$stat_grands
+
+  n_stats <- ncol(stat_mat)
+  n_rows  <- nrow(tab_df)
+
+  # Variable display name (for header line above table)
+  mean_display <- if (!is.null(tab_obj$mean_labels) &&
+                      !is.na(tab_obj$mean_labels[1L]) &&
+                      nzchar(tab_obj$mean_labels[1L])) {
+    tab_obj$mean_labels[1L]
+  } else {
+    tab_obj$mean_names[1L]
+  }
+
+  # --- Pre-format all values ------------------------------------------------
+  val_strs   <- matrix("", nrow = n_rows, ncol = n_stats)
+  total_strs <- character(n_stats)
+
+  for (k in seq_len(n_stats)) {
+    is_n <- (stat_tokens[k] == "n")
+    for (i in seq_len(n_rows)) {
+      val <- stat_mat[i, k]
+      if (is.na(val)) {
+        val_strs[i, k] <- ""
+      } else if (is_n) {
+        val_strs[i, k] <- formatC(as.integer(val), format = "d", big.mark = ",")
+      } else {
+        val_strs[i, k] <- trimws(.fmt_sum(val, digits = 7L, width = 1L, dec = dec))
+      }
+    }
+
+    grand <- stat_grands[k]
+    if (is.na(grand)) {
+      total_strs[k] <- ""
+    } else if (is_n) {
+      total_strs[k] <- formatC(as.integer(grand), format = "d", big.mark = ",")
+    } else {
+      total_strs[k] <- trimws(.fmt_sum(grand, digits = 7L, width = 1L, dec = dec))
+    }
+  }
+
+  # --- Column widths --------------------------------------------------------
+  cw <- integer(n_stats)
+  for (k in seq_len(n_stats)) {
+    cw[k] <- max(
+      nchar(val_strs[, k]),
+      nchar(total_strs[k]),
+      nchar(stat_names[k]),
+      4L,
+      na.rm = TRUE
+    ) + 2L
+  }
+
+  # Layout: pipe(2) + stat1 + ' ' + stat2 + ...
+  num_w       <- sum(cw) + (n_stats - 1L)
+  pipe_w      <- 2L
+  total_num_w <- pipe_w + num_w
+
+  # --- Label column width ---------------------------------------------------
+  var_display_tab <- if (!is.null(tab_obj$var_label) &&
+                        nzchar(tab_obj$var_label)) {
+    tab_obj$var_label
+  } else {
+    tab_obj$var_name
+  }
+
+  all_display_vals <- tab_df$value
+  natural_lbl_w <- max(
+    nchar(all_display_vals),
+    nchar("Total"),
+    nchar(var_display_tab),
+    1L,
+    na.rm = TRUE
+  )
+  if (tab_obj$var_type %in% c("factor", "ordered", "character")) {
+    natural_lbl_w <- max(natural_lbl_w + 2L, nchar(var_display_tab), nchar("Total"))
+  } else if (tab_obj$var_type == "haven_labelled") {
+    natural_lbl_w <- max(natural_lbl_w + 1L, nchar(var_display_tab), nchar("Total"))
+  }
+
+  natural_total_w <- natural_lbl_w + total_num_w
+  total_width     <- min(natural_total_w, width)
+  lbl_w           <- total_width - total_num_w
+  if (lbl_w < 5L) lbl_w <- 5L
+
+  # --- Header ---------------------------------------------------------------
+  sep_line <- paste0(char_rep(.BOX_H, lbl_w + 1L), .BOX_CROSS,
+                     char_rep(.BOX_H, num_w))
+
+  var_hdr_line <- mean_display
+
+  var_hdr <- .truncate_tab_label(var_display_tab, lbl_w)
+  col_parts <- vapply(seq_len(n_stats), function(k)
+    pad_left(stat_names[k], cw[k]), character(1L))
+  col_data <- paste(col_parts, collapse = " ")
+  hdr_line <- paste0(pad_left(var_hdr, lbl_w), " ", .BOX_V, col_data)
+
+  lines <- c(var_hdr_line, sep_line, hdr_line, sep_line)
+
+  # --- Data rows ------------------------------------------------------------
+  for (i in seq_len(n_rows)) {
+    row <- tab_df[i, ]
+
+    display_lbl <- row$value
+    if (tab_obj$var_type %in% c("factor", "ordered", "character")) {
+      display_lbl <- paste0("  ", display_lbl)
+    } else if (tab_obj$var_type == "haven_labelled") {
+      display_lbl <- paste0(" ", display_lbl)
+    }
+    display_lbl <- .truncate_tab_label(display_lbl, lbl_w)
+
+    if (tab_obj$var_type %in% c("numeric")) {
+      lbl_fmt <- pad_left(display_lbl, lbl_w)
+    } else {
+      lbl_fmt <- pad_right(display_lbl, lbl_w)
+    }
+
+    data_parts <- vapply(seq_len(n_stats), function(k)
+      pad_left(val_strs[i, k], cw[k]), character(1L))
+    data_str <- paste(data_parts, collapse = " ")
+
+    lines <- c(lines, paste0(lbl_fmt, " ", .BOX_V, data_str))
+  }
+
+  # --- Separator before total -----------------------------------------------
+  lines <- c(lines, sep_line)
+
+  # --- Total row ------------------------------------------------------------
+  total_lbl <- pad_left("Total", lbl_w)
+  total_parts <- vapply(seq_len(n_stats), function(k)
+    pad_left(total_strs[k], cw[k]), character(1L))
+  total_str <- paste(total_parts, collapse = " ")
+
+  lines <- c(lines, paste0(total_lbl, " ", .BOX_V, total_str))
+
+  lines
 }

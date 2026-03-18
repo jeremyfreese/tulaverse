@@ -70,6 +70,7 @@
 tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
                     value = TRUE, label = TRUE, width = NULL,
                     pct = "col", freq = TRUE, by = NULL, mean = NULL,
+                    var = NULL, stat = NULL,
                     listwise = TRUE, dec = NULL, ...) {
 
   # Capture expressions before evaluation
@@ -77,6 +78,19 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
   x_expr    <- substitute(x)
   by_expr   <- substitute(by)
   mean_expr <- substitute(mean)
+  var_expr  <- substitute(var)
+
+  # --- var= is a synonym for mean= ----------------------------------------
+  has_var_arg  <- !missing(var) && !is.null(var_expr) &&
+                  !identical(var_expr, quote(NULL))
+  has_mean_arg <- !missing(mean) && !is.null(mean_expr) &&
+                  !identical(mean_expr, quote(NULL))
+  if (has_var_arg && has_mean_arg) {
+    stop("tulatab(): specify either 'mean' or 'var', not both.", call. = FALSE)
+  }
+  if (has_var_arg) {
+    mean_expr <- var_expr
+  }
 
   # --- Resolve y vector and name -------------------------------------------
   if (!is.null(data)) {
@@ -101,8 +115,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
   }
 
   # --- Detect whether mean was supplied -------------------------------------
-  has_mean <- !missing(mean) && !is.null(mean_expr) &&
-              !identical(mean_expr, quote(NULL))
+  has_mean <- has_mean_arg || has_var_arg
 
   if (has_mean) {
     # Resolve mean= into a list of numeric vectors + names + labels.
@@ -121,11 +134,26 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
     }
   }
 
+  # --- Parse stat= argument -------------------------------------------------
+  has_stat    <- !is.null(stat)
+  stat_tokens <- NULL
+  if (has_stat) {
+    stat_tokens <- .parse_stat_tokens(stat)
+    if (!has_mean) {
+      stop("tulatab(): 'stat' requires 'mean' or 'var' to specify the variable.",
+           call. = FALSE)
+    }
+  }
+
   # --- Detect whether x was supplied (two-way mode) ------------------------
   has_x <- !missing(x) && !is.null(x_expr) && !identical(x_expr, quote(NULL))
 
   if (has_x) {
     # --- Two-way crosstab path ---------------------------------------------
+    if (has_stat) {
+      warning("tulatab(): 'stat' is only supported in one-way mode; ignoring.",
+              call. = FALSE)
+    }
     if (!is.null(data)) {
       x_vec  <- eval(x_expr, envir = data, enclos = parent.frame())
       x_name <- deparse(x_expr)
@@ -368,12 +396,24 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
                           show_value = isTRUE(value),
                           show_label = isTRUE(label))
 
-  # Compute per-category means if mean= is specified
+  # Compute per-category stats or means
   mean_info_ow <- NULL
+  stat_info_ow <- NULL
   if (has_mean) {
-    mean_info_ow <- .compute_oneway_multi_means(
-      vec, mean_list, tab_df, var_type, listwise = isTRUE(listwise)
-    )
+    if (has_stat) {
+      # stat= mode: guard against multi-variable
+      if (length(mean_list) > 1L) {
+        stop("tulatab(): 'stat' is not supported with multiple mean/var variables.",
+             call. = FALSE)
+      }
+      stat_info_ow <- .compute_oneway_stats(
+        vec, mean_list[[1L]], tab_df, var_type, stat_tokens
+      )
+    } else {
+      mean_info_ow <- .compute_oneway_multi_means(
+        vec, mean_list, tab_df, var_type, listwise = isTRUE(listwise)
+      )
+    }
   }
 
   # Construct and return the S3 object
@@ -396,7 +436,12 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
     mean_labels      = if (has_mean) mean_labels else NULL,
     mean_grands      = if (!is.null(mean_info_ow)) {
       list(means = mean_info_ow$mean_totals, ns = mean_info_ow$n_totals)
-    } else NULL
+    } else NULL,
+    stat_mat         = if (!is.null(stat_info_ow)) stat_info_ow$stat_mat else NULL,
+    stat_names       = if (has_stat) vapply(stat_tokens, .stat_display_name,
+                                            character(1L)) else NULL,
+    stat_tokens      = stat_tokens,
+    stat_grands      = if (!is.null(stat_info_ow)) stat_info_ow$stat_grands else NULL
   )
 }
 
@@ -466,7 +511,9 @@ new_tula_tab <- function(tab_df, var_name, var_type, show_cum,
                          dec = NULL,
                          mean_mat = NULL, n_mat = NULL,
                          mean_names = NULL, mean_labels = NULL,
-                         mean_grands = NULL) {
+                         mean_grands = NULL,
+                         stat_mat = NULL, stat_names = NULL,
+                         stat_tokens = NULL, stat_grands = NULL) {
   structure(
     list(
       tab_df           = tab_df,
@@ -485,7 +532,11 @@ new_tula_tab <- function(tab_df, var_name, var_type, show_cum,
       n_mat            = n_mat,
       mean_names       = mean_names,
       mean_labels      = mean_labels,
-      mean_grands      = mean_grands
+      mean_grands      = mean_grands,
+      stat_mat         = stat_mat,
+      stat_names       = stat_names,
+      stat_tokens      = stat_tokens,
+      stat_grands      = stat_grands
     ),
     class = "tula_tab"
   )
