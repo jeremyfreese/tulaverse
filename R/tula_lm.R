@@ -33,7 +33,8 @@ tula.lm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Number of obs" = n_obs,
     if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
     "R-squared"     = r2,
-    "Adj R-squared" = adj_r2
+    "Adj R-squared" = adj_r2,
+    "Root MSE"      = s$sigma
   )
 
   opts    <- .parse_tula_opts(ref, label)
