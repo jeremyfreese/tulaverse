@@ -36,7 +36,10 @@
 #' @return Character string of exactly `width` characters.
 fmt_num <- function(x, digits = 4, width = 10) {
   if (is.na(x)) return(strrep(" ", width))
-  s <- formatC(x, digits = digits, format = "g", flag = " ")
+  s <- formatC(x, digits = digits, format = "fg", flag = " ")
+  # Fall back to scientific notation if fixed form overflows column width
+  if (nchar(trimws(s)) > width)
+    s <- formatC(x, digits = digits, format = "g", flag = " ")
   s <- .strip_lead_zero(s)
   formatC(s, width = width, flag = " ")
 }
@@ -82,7 +85,11 @@ fmt_header_val <- function(x, width = 10, fmt = "g4") {
   if (is.integer(x) || (is.numeric(x) && x == round(x) && abs(x) < 1e9)) {
     return(formatC(as.integer(x), format = "d", width = width))
   }
-  formatC(x, digits = 4, format = "g", width = width)
+  s <- formatC(x, digits = 4, format = "fg", width = width)
+  # Fall back to scientific notation if fixed form overflows column width
+  if (nchar(trimws(s)) > width)
+    s <- formatC(x, digits = 4, format = "g", width = width)
+  s
 }
 
 #' @keywords internal

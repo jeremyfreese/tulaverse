@@ -52,8 +52,28 @@
 #' @param mean Optional.  A numeric vector or unquoted variable name.  When
 #'   supplied, replaces frequencies and percentages with the mean and
 #'   non-missing count (N) of this variable per category (one-way) or per
-#'   cell (two-way).  The \code{pct} and \code{freq} parameters are silently
-#'   ignored in two-way mode when \code{mean} is specified.
+#'   cell (two-way).  In one-way mode, supports multiple variables via
+#'   \code{mean = c(mpg, wt)}.  The \code{pct} and \code{freq} parameters
+#'   are silently ignored in two-way mode when \code{mean} is specified.
+#' @param var Optional.  Synonym for \code{mean}.  Specify one or the other,
+#'   not both.
+#' @param stat Optional character string.  One-way mode only.  A
+#'   space-separated list of summary statistics to display per category
+#'   instead of the default Mean + N columns.  Requires \code{mean} or
+#'   \code{var} to identify the variable.  Valid tokens: \code{"mean"},
+#'   \code{"median"}, \code{"sd"}, \code{"n"}, and percentiles
+#'   \code{"p1"}\dots\code{"p99"} (e.g. \code{"p25"}, \code{"p75"}).
+#'   Example: \code{stat = "mean sd p25 p75"}.  Ignored with a warning in
+#'   two-way mode.
+#' @param dec Optional integer.  Number of decimal places for displayed
+#'   values.  Applies to mean-mode and stat-mode numeric output.  When
+#'   \code{NULL} (default), formatting uses the standard smart-rounding
+#'   rules.
+#' @param listwise Logical (default \code{TRUE}).  When displaying multiple
+#'   \code{mean}/\code{var} variables in one-way mode, should observations
+#'   missing on \emph{any} variable be excluded from \emph{all} columns?
+#'   When \code{FALSE}, each variable column uses all of its own non-missing
+#'   observations independently.
 #' @param ... Reserved for future extensions.
 #'
 #' @return Invisibly returns a \code{tula_tab} (one-way),

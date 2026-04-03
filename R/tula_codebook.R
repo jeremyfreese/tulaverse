@@ -619,7 +619,7 @@ print.tula_codebook <- function(x, ...) {
     # Integer-like: no decimals
     formatC(x, format = "f", digits = 0, big.mark = "")
   } else {
-    trimws(formatC(x, digits = 6, format = "g"))
+    trimws(formatC(x, digits = 6, format = "fg"))
   }
 }
 

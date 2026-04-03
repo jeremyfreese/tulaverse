@@ -350,7 +350,7 @@ format_summary_table <- function(rows, opts, total_width) {
     s <- sprintf("%.*f", dec, x)
   } else if (abs(x) > 0.1) {
     # Smart mode (summarize path): cap at 3 decimal places for larger values
-    g_str    <- formatC(x, digits = digits, format = "g", flag = " ")
+    g_str    <- formatC(x, digits = digits, format = "fg", flag = " ")
     g_dp     <- if (grepl("\\.", g_str)) {
       nchar(sub(".*\\.", "", trimws(g_str)))
     } else {
@@ -360,7 +360,10 @@ format_summary_table <- function(rows, opts, total_width) {
     s        <- sprintf("%.*f", dp, x)
   } else {
     # Smart mode: significant-digit formatting for small values
-    s <- formatC(x, digits = digits, format = "g", flag = " ")
+    s <- formatC(x, digits = digits, format = "fg", flag = " ")
+    # Fall back to scientific notation if fixed form overflows column width
+    if (nchar(trimws(s)) > width)
+      s <- formatC(x, digits = digits, format = "g", flag = " ")
     s <- trimws(s)
   }
 
