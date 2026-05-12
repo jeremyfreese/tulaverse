@@ -1,6 +1,4 @@
-#' @keywords internal
-#'
-#' Build the canonical coefficient data frame from a model.
+#' Build the canonical coefficient data frame from a model
 #'
 #' Extracts the coefficient matrix and confidence intervals, then groups
 #' factor variable dummy rows under a shared header row (Stata-inspired layout).
@@ -39,6 +37,7 @@
 #' @return A data frame with columns:
 #'   label, is_factor_header, is_intercept, is_ref, is_cutpoint,
 #'   estimate, std_err, statistic, p_value, ci_lower, ci_upper.
+#' @noRd
 build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
                           assign_vec   = NULL,
                           term_labels  = NULL,
@@ -530,9 +529,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 }
 
 
-#' @keywords internal
-#'
-#' Format the coefficient table as a character vector of printable lines.
+#' Format the coefficient table as a character vector of printable lines
 #'
 #' Renders the canonical coef_df produced by `build_coef_df()` into Stata-
 #' style output: separator lines, a header row, factor group headers, indented
@@ -559,6 +556,7 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
 #'   right-aligned above the SE column (e.g. `"Linearized"` for survey models).
 #'
 #' @return Character vector, one element per line.
+#' @noRd
 format_coef_table <- function(coef_df, stat_label, wide, total_width,
                               exp = FALSE, exp_label = NULL, level = 95,
                               se_label = NULL, se_super = NULL) {
@@ -732,9 +730,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 }
 
 
-#' @keywords internal
-#'
-#' Format ancillary parameter rows for the bottom of the coefficient table.
+#' Format ancillary parameter rows for the bottom of the coefficient table
 #'
 #' Some model types estimate auxiliary parameters alongside the linear
 #' predictor (e.g., negative binomial dispersion). These are rendered below
@@ -753,6 +749,7 @@ format_coef_table <- function(coef_df, stat_label, wide, total_width,
 #'   in this function but accepted for API consistency with
 #'   `format_coef_table()`. Default 95.
 #' @return Character vector of lines (separator + row pairs).
+#' @noRd
 format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
   cw_coef <- 10L
   cw_se   <- 10L

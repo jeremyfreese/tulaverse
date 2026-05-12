@@ -21,7 +21,25 @@ library(tulaverse)
 library(haven)
 library(nnet)
 
-gss_full <- read_dta("/Users/jeremyfreese/Library/CloudStorage/Dropbox/GSS/gss7224_r2.dta")
+# Path to the GSS cumulative .dta file. Override by setting the
+# TULAVERSE_GSS environment variable (e.g. in ~/.Renviron) or by
+# editing the default below to match your local copy.
+gss_path <- Sys.getenv(
+  "TULAVERSE_GSS",
+  unset = "~/Dropbox/GSS/gss7224_r2.dta"
+)
+gss_path <- path.expand(gss_path)
+
+if (!file.exists(gss_path)) {
+  stop(
+    "GSS .dta file not found at '", gss_path, "'.\n",
+    "Set the TULAVERSE_GSS environment variable to its location, ",
+    "or edit gss_path in this chunk.",
+    call. = FALSE
+  )
+}
+
+gss_full <- read_dta(gss_path)
 
 gss <- gss_full[gss_full$year == 2024,
   c("age", "sex", "race", "educ", "degree", "realrinc",
@@ -119,6 +137,120 @@ across outcomes:
 tula(m_mlogit, parallel = TRUE)
 ```
 
+## Ordered logit
+
+For ordered outcomes, `tula()` handles both `MASS::polr()` and
+`ordinal::clm()`. Cutpoints appear in the footer:
+
+```{r}
+#| message: false
+m_oprobit <- MASS::polr(as_factor(happy) ~ educ + age + health,
+                        data = gss, method = "probit", Hess = TRUE)
+tula(m_oprobit)
+```
+
+## Count outcomes
+
+Negative binomial regression via `MASS::glm.nb()`:
+
+```{r}
+#| message: false
+m_nb <- MASS::glm.nb(childs ~ educ + age + sex, data = gss)
+tula(m_nb)
+```
+
+## Quantile regression
+
+Pass a single `tau` or a vector of quantiles to `quantreg::rq()`. With
+multiple quantiles, `parallel = TRUE` shows them side by side:
+
+```{r}
+#| message: false
+m_rq <- quantreg::rq(realrinc ~ educ + age + sex,
+                     tau = c(0.25, 0.5, 0.75), data = gss)
+tula(m_rq, parallel = TRUE)
+```
+
+## Cox proportional hazards
+
+For time-to-event outcomes, `tula()` handles `survival::coxph()`. The
+`exp` argument defaults to `TRUE` for Cox models, so coefficients
+print as hazard ratios:
+
+```{r}
+#| message: false
+# Synthetic example using GSS age as "time" and very_happy as the event
+m_cox <- survival::coxph(
+  survival::Surv(age, very_happy) ~ educ + sex + health,
+  data = gss
+)
+tula(m_cox)
+```
+
+## Conditional logit
+
+For matched / choice-set data, `tula()` handles `survival::clogit()` with a
+Stata-style "Conditional (fixed-effects) logistic regression" header (LR
+chi2, Pseudo R2, number of strata):
+
+```{r}
+#| message: false
+data(infert, package = "survival")
+m_clogit <- survival::clogit(
+  case ~ spontaneous + induced + strata(stratum),
+  data = infert
+)
+tula(m_clogit, exp = TRUE, wide = TRUE)
+```
+
+## Tobit / survival regression
+
+`tula()` handles both `AER::tobit()` (the typical tobit interface) and
+`survival::survreg()` directly:
+
+```{r}
+#| message: false
+m_tobit <- AER::tobit(realrinc ~ educ + age + sex, data = gss, left = 0)
+tula(m_tobit)
+```
+
+## Fixed effects
+
+`fixest` models pick up cluster-robust SEs by default and `tula()`
+preserves the fixed effects panel in the header:
+
+```{r}
+#| message: false
+m_fe <- fixest::feols(realrinc ~ educ + age + sex | race, data = gss)
+tula(m_fe)
+```
+
+## Survey-weighted regression
+
+When you have complex survey designs, fit with `survey::svyglm()`. The
+design-based standard errors flow through automatically:
+
+```{r}
+#| message: false
+des <- survey::svydesign(ids = ~1, weights = ~1, data = na.omit(
+  gss[, c("realrinc", "educ", "age", "sex")]
+))
+m_svy <- survey::svyglm(realrinc ~ educ + age + sex, design = des)
+tula(m_svy)
+```
+
+## Selecting coefficients
+
+For long coefficient tables, `select =` prints just the rows you ask for.
+Pass a factor's base name to grab the whole block:
+
+```{r}
+tula(m_ols, select = c("educ", "race"))
+```
+
+Add `selectheader = TRUE` or `selectfooter = TRUE` to bring back the
+header or trailing rows.
+
 # tulatab()
 
 ## Frequency tables
@@ -145,6 +277,33 @@ Replace cell frequencies with means of a numeric variable using `mean =`:
 
 ```{r}
 tulatab(degree, sex, data = gss, mean = realrinc)
+```
+
+## Multiple means in one table
+
+In one-way mode, `mean = c(...)` shows several variables side by side
+(or use `var =` as a synonym):
+
+```{r}
+tulatab(degree, data = gss, mean = c(realrinc, educ, hrs1))
+```
+
+## Custom summary statistics
+
+The `stat =` argument replaces the default Mean + N columns with any
+combination of `mean`, `median`, `sd`, `n`, and percentiles (`p1`--`p99`):
+
+```{r}
+tulatab(degree, data = gss, var = realrinc,
+        stat = "median p25 p75 n")
+```
+
+## Crosstabs by panel
+
+A `by =` variable produces one crosstab per panel:
+
+```{r}
+tulatab(happy, degree, data = gss, by = sex)
 ```
 
 # tulaplot()
@@ -180,14 +339,14 @@ tulaplot(gss[!is.na(gss$degree) & !is.na(gss$happy), ],
 
 # What else?
 
-The tulaverse supports many more model types out of the box:
+A few other model types not shown above:
 
-- **Negative binomial** (`MASS::glm.nb`)
-- **Ordered logit/probit** (`MASS::polr`, `ordinal::clm`)
-- **Cox proportional hazards** (`survival::coxph`)
-- **Quantile regression** (`quantreg::rq`)
-- **Fixed effects models** (`fixest::feols`, `feglm`, `fepois`, `fenegbin`)
-- **Tobit / survival regression** (`AER::tobit`, `survival::survreg`)
+- **Ordered logit via `ordinal::clm()`** --- same `tula()` call as `polr`.
+- **Other `fixest` families** --- `feglm`, `fepois`, `fenegbin`.
+- **Survival regression via `survival::survreg()`** --- same path as
+  `AER::tobit()`.
+- **Constrained estimation via `restriktor::restriktor()`** --- header
+  reports the constrained log-likelihood and original-model fit.
 
 Each one uses the same `tula()` call and supports the same display options
-(`wide`, `ref`, `exp`, `robust`, `level`, and more).
+(`wide`, `ref`, `exp`, `robust`, `level`, `select`, and more).

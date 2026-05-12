@@ -24,8 +24,8 @@ A ggplot object with \code{\link[=theme_tula]{theme_tula()}} applied.
 A thin wrapper around \code{\link[ggplot2:ggplot]{ggplot2::ggplot()}} that automatically applies
 \code{\link[=theme_tula]{theme_tula()}} for Stata-inspired appearance with larger text. The returned
 object is a standard ggplot and can be modified with any ggplot2 function.
-Any subsequent theme settings added by the user silently override the
-defaults.
+Any subsequent theme settings added by the user are layered on top of the
+defaults, following normal ggplot2 layering rules.
 }
 \examples{
 tulaplot(mtcars, ggplot2::aes(x = wt, y = mpg)) +

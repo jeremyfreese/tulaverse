@@ -15,12 +15,15 @@
 #'   [MASS::glm.nb()]), `multinom` (multinomial logit via [nnet::multinom()]),
 #'   `polr` (ordered regression via [MASS::polr()]), `clm` (ordered regression
 #'   via [ordinal::clm()]), `coxph` (Cox proportional hazards via
-#'   [survival::coxph()]), `rq` and `rqs` (quantile regression via
+#'   [survival::coxph()]), `clogit` (conditional logistic regression via
+#'   [survival::clogit()]), `rq` and `rqs` (quantile regression via
 #'   [quantreg::rq()]), `fixest` (fixed effects models via [fixest::feols()],
-#'   [fixest::feglm()], [fixest::fepois()], [fixest::fenegbin()]),
+#'   [fixest::feglm()], [fixest::fepois()], `fixest::fenegbin()`),
 #'   `survreg` (tobit / survival regression via [AER::tobit()] or
-#'   [survival::survreg()]). When passed a data frame or atomic vector,
-#'   produces descriptive statistics output.
+#'   [survival::survreg()]), `svyglm` (survey-weighted GLMs via
+#'   [survey::svyglm()]), and `restriktor` (constrained linear / GLM
+#'   estimation via `restriktor::restriktor()`). When passed a data frame or
+#'   atomic vector, produces descriptive statistics output.
 #' @param wide Logical or `NULL`. If `TRUE`, 95% confidence interval columns
 #'   are added. If `FALSE`, they are omitted. If `NULL` (the default),
 #'   confidence intervals are shown automatically when the effective output
@@ -68,15 +71,33 @@
 #'   significance stars instead of stacked blocks. Default `FALSE`.
 #' @param robust Logical. If `TRUE`, heteroskedasticity-robust (HC3) standard
 #'   errors are used. Requires the `sandwich` package. Default `FALSE`.
+#'   Ignored (with a warning) for `svyglm` models, which already use
+#'   design-based sandwich variance estimation, and for `restriktor` models,
+#'   whose SE type is controlled at estimation time via `restriktor()`'s
+#'   `se=` argument.
 #' @param vcov Character or matrix. When a character string (e.g. `"HC4"`),
 #'   specifies the HC type for robust SEs. When a matrix, used directly as
-#'   the variance-covariance matrix. Default `NULL`.
+#'   the variance-covariance matrix. Default `NULL`. Same `svyglm` /
+#'   `restriktor` exceptions as `robust=`.
 #' @param cluster Character. Variable name for cluster-robust standard errors.
-#'   Implies `robust = TRUE`. Default `NULL`.
+#'   Implies `robust = TRUE`. Default `NULL`. Same `svyglm` / `restriktor`
+#'   exceptions as `robust=`.
 #' @param codebook Logical. For data frames and vectors: if `TRUE`, produces
 #'   Stata-inspired codebook output (per-variable blocks with type, range,
 #'   unique values, and tabulations or percentile distributions) instead of
 #'   the default summary table. Default `FALSE`. Ignored for regression output.
+#' @param select Optional character vector of term names. When supplied,
+#'   only matching rows of the coefficient table are printed. Factor
+#'   variables can be selected by their base name (e.g. `select = "cyl"`
+#'   shows the factor header and all level rows). Use `"(Intercept)"` to
+#'   select the intercept. Default `NULL` (show all coefficients). Ignored
+#'   for summarize output.
+#' @param selectheader Logical. When `select` is in effect, controls whether
+#'   the header block (fit statistics, sample stats) is shown. Default
+#'   `FALSE` (suppressed for a compact display).
+#' @param selectfooter Logical. When `select` is in effect, controls whether
+#'   trailing footer rows (ancillary parameters, base-outcome notes, etc.)
+#'   are shown. Default `FALSE`.
 #' @param data Optional data frame. When supplied, `model` is treated as an
 #'   unquoted variable name (or `c()` of names) evaluated inside `data`.
 #'   For example, `tula(height, data = df)` or
@@ -223,20 +244,116 @@ tula.data.frame <- function(model, wide = NULL, ref = FALSE, label = TRUE,
 
 
 # ---------------------------------------------------------------------------
+# Anatomy of a tula.<class>() method
+#
+# To add support for a new model class, write a single S3 method following
+# the template below and tag it with `#' @rdname tula` so it shares the
+# `?tula` man page. The method's job is to massage the fitted model into
+# the canonical `tula_output` shape and hand it to the print machinery.
+#
+# Required steps (in roughly this order):
+#
+#   1. Normalise the user arguments:
+#        level <- .resolve_level(level)
+#        wide  <- .resolve_wide(wide, width)
+#
+#   2. Extract the coefficient matrix `ct` (estimate, SE, statistic, p)
+#      and (if `wide`) a CI matrix `ci` from the model. The two matrices
+#      must have row names that align with the model's coefficients.
+#
+#   3. If the model supports `robust` / `vcov` / `cluster`, run
+#        robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
+#      and, when it is non-NULL, recompute `ct` via
+#        ct <- .recompute_ct_robust(ct, robust_info$vcov_mat, stat_label,
+#                                   df = df.residual(model))
+#      and `ci` via `.robust_ci()`. Models that handle their own SEs
+#      (svyglm, restriktor) should warn and ignore these arguments —
+#      see R/tula_svyglm.R and R/tula_restriktor.R for the idiom.
+#
+#   4. Build header_left / header_right named numeric vectors. Typical
+#      left entries: AIC, BIC, Log likelihood, McFadden's R2. Typical
+#      right entries: "Number of obs", "Num. clusters" (when clustered),
+#      "F", "R-squared", "Root MSE".
+#
+#   5. Call `build_coef_df(model, ct, ci, wide, ref, label, ...)` to
+#      produce the canonical row-per-coefficient data frame (factor
+#      grouping, label resolution, ref-row insertion all happen here).
+#      See ?build_coef_df for the optional override arguments to use
+#      when `model.matrix(model)` / `model.frame(model)` don't behave
+#      like base-R expects.
+#
+#   6. Construct the output with `new_tula_output(...)`. The required
+#      fields are documented in the constructor's comment block below.
+#      `value_fmts` is the main lever for tweaking how header values
+#      print (e.g. `c("Log likelihood" = "f3")` to use fixed notation).
+#
+#   7. Return `.attach_select(out, ...)`. This is mandatory — it captures
+#      the `select` / `selectheader` / `selectfooter` arguments from `...`
+#      so the print method can subset the table. Omitting this silently
+#      breaks `tula(model, select = ...)` for the new class.
+#
+# Two variant constructors exist for models that print as multiple stacked
+# coefficient tables:
+#   - new_tula_multinom_output()  — one block per non-base outcome
+#   - new_tula_rqs_output()       — one block per quantile
+# Both follow the same overall flow but expect a `blocks` list instead of
+# a single `coef_df`. R/tula_multinom.R and R/tula_rq.R are the reference
+# implementations.
+#
+# See R/tula_lm.R for the shortest end-to-end example (~60 lines) and
+# R/tula_glm.R / R/tula_negbin.R for slightly more complex headers.
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
 # Internal constructor for the canonical tula_output S3 object.
 #
-# All tula.*() methods return one of these. The print method operates on
-# this object without knowing anything about the original model type.
+# All tula.*() methods return one of these (the multinomial and multi-
+# quantile paths use their own constructors — see new_tula_multinom_output()
+# and new_tula_rqs_output() below). The print method operates on this
+# object without knowing anything about the original model type.
 #
 # Fields:
-#   model_type   - character: "lm", "glm", etc.
-#   header_left  - named numeric vector: left-column header entries
-#   header_right - named numeric vector: right-column header entries
-#   coef_df      - data.frame from build_coef_df()
-#   stat_label   - character: "t" or "z"
-#   wide         - logical: were CIs requested?
-#   family_label - character or NULL: printed above header for glm
-#   width        - integer or Inf: maximum output line width (NULL = use option)
+#   model_type     - character: "lm", "glm", "negbin", "coxph", etc. Used
+#                    only for debugging / inspection; the print method does
+#                    not branch on it.
+#   header_left    - named numeric vector: left-column header entries (model
+#                    fit stats: AIC, BIC, log-lik, R-squared, ...).
+#   header_right   - named numeric vector: right-column header entries
+#                    (sample stats: N, clusters, F, ...).
+#   coef_df        - data.frame from build_coef_df() (see ?build_coef_df).
+#   stat_label     - character: "t" or "z" — column header for the test
+#                    statistic and used to choose "P>|t|" vs "P>|z|".
+#   wide           - logical: were CI columns requested at print time?
+#   family_label   - character or NULL: extra label line printed above the
+#                    header block (e.g. "Family: binomial / Link: logit").
+#   width          - integer, Inf, or NULL: maximum output line width.
+#                    NULL means "read getOption('width') at print time".
+#   value_fmts     - named character vector of per-header-label format
+#                    overrides (e.g. c("Log likelihood" = "f3")). Names
+#                    match entries in header_left / header_right. Missing
+#                    entries fall back to "g4" (4 significant digits).
+#   exp            - logical: exponentiate coefficients at print time?
+#                    Affects the estimate, SE (renamed "DMSE"), CI bounds,
+#                    and reference-level filler value.
+#   dep_var        - character or NULL: the LHS of the model formula,
+#                    printed above the header when supplied.
+#   exp_label      - character or NULL: column-header override for the
+#                    estimate column when exp = TRUE (e.g. "IRR",
+#                    "Haz. Ratio"). Default is "exp(b)".
+#   ancillary_df   - data frame or NULL: extra rows (estimate, SE, ...) to
+#                    append below the main coefficient table inside the
+#                    same frame (e.g. negative-binomial dispersion).
+#   level          - numeric: CI width as a percentage (e.g. 95). Used to
+#                    label the CI columns ("[95% Conf").
+#   outcome_levels - character vector or NULL: ordered logit / probit
+#                    outcome levels, used by some print paths to label
+#                    cutpoints. NULL for unordered models.
+#   se_label       - character or NULL: SE column header override (e.g.
+#                    "Robust SE", "Std. Err.").
+#   se_super       - character or NULL: a small superscript-like line
+#                    placed above the SE column (e.g. "Linearized" for
+#                    svyglm output).
 # ---------------------------------------------------------------------------
 new_tula_output <- function(model_type,
                             header_left,

@@ -24,7 +24,8 @@ enlarged text for readability in teaching and presentation contexts.
 \details{
 Can be used standalone (\code{ggplot(...) + theme_tula()}) or is applied
 automatically by \code{\link[=tulaplot]{tulaplot()}}. Any theme elements the user adds
-afterward silently override the defaults set here.
+afterward override the defaults set here, following normal ggplot2
+layering rules.
 }
 \examples{
 library(ggplot2)

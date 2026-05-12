@@ -24,8 +24,8 @@
 #' A thin wrapper around [ggplot2::ggplot()] that automatically applies
 #' [theme_tula()] for Stata-inspired appearance with larger text. The returned
 #' object is a standard ggplot and can be modified with any ggplot2 function.
-#' Any subsequent theme settings added by the user silently override the
-#' defaults.
+#' Any subsequent theme settings added by the user are layered on top of the
+#' defaults, following normal ggplot2 layering rules.
 #'
 #' @param data A data frame (or tibble, or data frame extension).
 #' @param mapping Default list of aesthetic mappings to use for the plot,
@@ -61,7 +61,8 @@ tulaplot <- function(data = NULL, mapping = ggplot2::aes(), ...,
 #'
 #' Can be used standalone (`ggplot(...) + theme_tula()`) or is applied
 #' automatically by [tulaplot()]. Any theme elements the user adds
-#' afterward silently override the defaults set here.
+#' afterward override the defaults set here, following normal ggplot2
+#' layering rules.
 #'
 #' @param base_size Base font size in points (default 14). All other text
 #'   sizes are computed relative to this value. The ggplot2 default is 11;

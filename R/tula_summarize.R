@@ -184,7 +184,7 @@ print.tula_summary <- function(x, ...) {
 # Core table formatter
 # ---------------------------------------------------------------------------
 
-#' @keywords internal
+#' @noRd
 format_summary_table <- function(rows, opts, total_width) {
   # Fixed column widths
   cw_obs  <- 10L

@@ -9,13 +9,16 @@ Description: Provides Stata-inspired console output for regression models,
     formatted regression output — including a model fit header and coefficient
     table with factor variable grouping — for a wide range of model types
     (lm, glm, negative binomial, ordered regression, multinomial logit, Cox
-    proportional hazards, and quantile regression). The tulatab() function
-    produces one-way frequency tables and two-way crosstabulations with
-    optional means. Plotting functions (tulaplot(), theme_tula()) provide
+    proportional hazards, conditional logistic regression, quantile
+    regression, fixed effects models, tobit and survival regression,
+    survey-weighted GLMs, and constrained estimation). The tulatab() function produces one-way frequency tables
+    and two-way crosstabulations with optional means and other summary
+    statistics. Plotting functions (tulaplot(), theme_tula()) provide
     ggplot2 integration with defaults closer to those used by Stata.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports: stats, ggplot2 (>= 3.5.0)
-Suggests: knitr, rmarkdown, quarto, quantreg, survival, sandwich, haven, fixest, AER, survey
+Suggests: knitr, rmarkdown, MASS, nnet, ordinal, quantreg, survival,
+    sandwich, haven, fixest, AER, survey, restriktor

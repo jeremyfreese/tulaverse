@@ -1,16 +1,16 @@
-#' @keywords internal
-#'
-#' Compute the minimum value-field width needed for a set of header values.
+#' Minimum value-field width for a header block
 #'
 #' Formats each value at width=1 (i.e. trimmed to its natural width), then
 #' returns the width of the widest result. This gives the tightest right-
-#' aligned value column that fits all values in the block without wasted space.
+#' aligned value column that fits all values in the block without wasted
+#' space.
 #'
 #' @param vals Numeric vector of values to display (named).
 #' @param fmts Named character vector of format overrides (e.g.
 #'   `c("Log likelihood" = "f3")`). Names match `names(vals)`. Missing entries
 #'   use the default `"g4"` format.
 #' @return Integer. Minimum value-field width for this block.
+#' @noRd
 .header_val_width <- function(vals, fmts = character(0L)) {
   if (length(vals) == 0L) return(0L)
   # fmt_header_val with width=1 returns the value at its natural width
@@ -27,9 +27,7 @@
 }
 
 
-#' @keywords internal
-#'
-#' Format the two-column header block (Stata-inspired layout).
+#' Format the two-column header block (Stata-inspired layout)
 #'
 #' Renders a left column (model fit stats) and a right column (sample stats)
 #' side by side, with exactly `total_width` characters per line.
@@ -53,6 +51,7 @@
 #'
 #' @return Character vector, one element per line, each exactly total_width
 #'   characters wide.
+#' @noRd
 format_header <- function(header_left, header_right,
                           total_width, col_gap_min = 3L,
                           value_fmts = character(0L)) {
@@ -103,9 +102,7 @@ format_header <- function(header_left, header_right,
 }
 
 
-#' @keywords internal
-#'
-#' Compute the shared total output width for header and coefficient table.
+#' Compute the shared total output width for header and coefficient table
 #'
 #' This is the single source of truth for the width used by both
 #' format_header() and format_coef_table(). Both blocks will have identical
@@ -126,6 +123,7 @@ format_header <- function(header_left, header_right,
 #'   `format_header()`). Must match what is passed to `format_header()`.
 #'
 #' @return Integer. The shared total width for the output.
+#' @noRd
 compute_total_width <- function(header_left, header_right, coef_labels,
                                 wide, col_gap_min = 3L,
                                 value_fmts = character(0L)) {
