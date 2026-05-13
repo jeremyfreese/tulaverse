@@ -116,6 +116,17 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     dc %in% c("factor", "ordered")
   }
 
+  # Determine whether a term is a bare logical (TRUE/FALSE) variable.
+  # Logicals produce a single coefficient named "<term>TRUE" (with FALSE as
+  # the implicit baseline). We treat the "TRUE" suffix as redundant and
+  # strip it for display.
+  is_logical_term <- function(term_nm) {
+    if (length(data_classes) == 0) return(FALSE)
+    dc <- data_classes[term_nm]
+    if (is.na(dc)) return(FALSE)
+    identical(unname(dc), "logical")
+  }
+
   # Strip function wrappers like factor(), ordered(), I() from a term name
   # so that "factor(cyl)" displays as "cyl" in the group header row.
   strip_fn_wrapper <- function(term_nm) {
@@ -199,7 +210,14 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
       lbl <- if (collapsing) bare_nm else paste0("  ", level_display)
     } else {
       last_factor_term <- NULL
-      lbl              <- gsub(":", "*", nm, fixed = TRUE)
+      # For a bare logical, the coefficient is named "<term>TRUE"; show just
+      # the term name so the redundant "TRUE" suffix doesn't clutter output.
+      if (is_logical_term(term_nm) &&
+          identical(nm, paste0(term_nm, "TRUE"))) {
+        lbl <- term_nm
+      } else {
+        lbl <- gsub(":", "*", nm, fixed = TRUE)
+      }
     }
 
     rows[[length(rows) + 1L]] <- .make_coef_row(
