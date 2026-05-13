@@ -45,7 +45,7 @@ tula.clogit <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ll_null  <- model$loglik[1L]   # null model log-likelihood (no predictors)
 
   # McFadden's pseudo R2
-  pseudo_r2 <- if (!is.null(ll_null) && is.finite(ll_null) && ll_null != 0)
+  mcfadden <- if (!is.null(ll_null) && is.finite(ll_null) && ll_null != 0)
     1 - ll / ll_null else NA_real_
 
   # Likelihood ratio test from summary.coxph
@@ -71,8 +71,8 @@ tula.clogit <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     sprintf("LR chi2(%d)", as.integer(lr_df)) else "LR chi2"
 
   header_left <- stats::setNames(
-    c(lr_chi2, lr_p, ll, pseudo_r2),
-    c(lr_label, "Prob > chi2", "Log likelihood", "Pseudo R2")
+    c(lr_chi2, lr_p, ll, mcfadden),
+    c(lr_label, "Prob > chi2", "Log likelihood", "McFadden R-sq")
   )
   header_right <- c(
     "Number of obs"    = n_obs,

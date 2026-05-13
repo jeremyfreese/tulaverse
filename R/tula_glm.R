@@ -14,16 +14,30 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   null_dev <- model$null.deviance
   n        <- n_obs
 
-  # McFadden's R² = 1 - L_fitted / L_null = 1 - deviance / null.deviance
-  mcfadden <- 1 - dev / null_dev
+  # 1 - deviance/null.deviance. For Bernoulli binomial (binomial family with
+  # all prior weights == 1) the saturated log-likelihood is zero, so this
+  # equals McFadden's R² = 1 - logLik(fit)/logLik(null). For grouped
+  # binomial, Poisson, Gamma, etc. the saturated log-likelihood is non-zero
+  # and the expression is the "deviance R²" — still a sensible likelihood-
+  # ratio index, but not strictly McFadden's. The header label is set
+  # accordingly below.
+  pseudo_r2 <- 1 - dev / null_dev
+  is_bernoulli_binomial <- identical(model$family$family, "binomial") &&
+    !is.null(model$prior.weights) && all(model$prior.weights == 1)
+  pseudo_r2_label <- if (is_bernoulli_binomial) "McFadden R-sq" else "Deviance R-sq"
 
   # Nagelkerke's R²
   # = (1 - exp((dev - null_dev) / n)) / (1 - exp(-null_dev / n))
-  # Cap at 1 to handle edge cases (e.g. Gaussian glm where formula can exceed 1)
-  nagelkerke <- min(
-    (1 - exp((dev - null_dev) / n)) / (1 - exp(-null_dev / n)),
-    1
-  )
+  # The formula assumes the saturated log-likelihood is zero, so it is
+  # only strictly Nagelkerke's R² for Bernoulli binomial glms; we suppress
+  # it outside that case rather than print a deviance-based analog that
+  # would mislead. Cap at 1 to handle edge cases.
+  nagelkerke <- if (is_bernoulli_binomial) {
+    min(
+      (1 - exp((dev - null_dev) / n)) / (1 - exp(-null_dev / n)),
+      1
+    )
+  } else NA_real_
 
   fam <- model$family$family
   lnk <- model$family$link
@@ -53,12 +67,14 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     "Log likelihood" = ll
   )
 
-  # Right header block
+  # Right header block. Nagelkerke is shown only when it's strictly defined
+  # (Bernoulli binomial); otherwise the row is omitted entirely rather than
+  # printed under a misleading label.
   header_right <- c(
     "Number of obs"   = n_obs,
     if (!is.null(robust_info$cluster_n)) c("Num. clusters" = robust_info$cluster_n),
-    "McFadden R-sq"   = mcfadden,
-    "Nagelkerke R-sq" = nagelkerke
+    stats::setNames(pseudo_r2, pseudo_r2_label),
+    if (is_bernoulli_binomial) c("Nagelkerke R-sq" = nagelkerke)
   )
 
   opts    <- .parse_tula_opts(ref, label)
