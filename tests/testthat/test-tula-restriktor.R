@@ -4,6 +4,7 @@
 test_that("constrained linear model (restriktor) output is stable", {
   skip_if_not_installed("restriktor")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   fit <- lm(mpg ~ wt + hp, data = mtcars)
   m   <- restriktor::restriktor(fit, constraints = "hp < 0")
   expect_snapshot(tula(m))

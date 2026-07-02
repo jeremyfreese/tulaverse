@@ -116,7 +116,7 @@
                             13        1  manual
       
 
-# character-backed haven-labelled codebook renders (not an error)
+# character-backed haven-labelled codebook output is stable
 
     Code
       tula(d, codebook = TRUE)

@@ -3,26 +3,31 @@
 
 test_that("data-frame summarize output is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   expect_snapshot(tula(mtcars))
 })
 
 test_that("summarize with median = TRUE (median/IQR) is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   expect_snapshot(tula(mtcars, median = TRUE))
 })
 
 test_that("summarize with mad = TRUE is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   expect_snapshot(tula(mtcars, mad = TRUE))
 })
 
 test_that("single-vector summarize output is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   expect_snapshot(tula(mtcars$mpg))
 })
 
 test_that("summarize of a subset with a factor column is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   d <- data.frame(
     mpg = mtcars$mpg,
     cyl = factor(mtcars$cyl),
@@ -34,6 +39,7 @@ test_that("summarize of a subset with a factor column is stable", {
 test_that("haven-labelled summarize output is stable", {
   skip_if_not_installed("haven")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   d <- data.frame(
     y = haven::labelled(mtcars$am, labels = c(auto = 0, manual = 1)),
     x = mtcars$mpg

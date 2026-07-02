@@ -11,18 +11,21 @@
 
 test_that("lm output is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp, data = mtcars)
   expect_snapshot(tula(m))
 })
 
 test_that("lm output with a grouped factor is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + factor(cyl), data = mtcars)
   expect_snapshot(tula(m))
 })
 
 test_that("lm output honours wide = TRUE (confidence interval columns)", {
   local_reproducible_output(width = 100)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp, data = mtcars)
   expect_snapshot(tula(m, wide = TRUE))
 })

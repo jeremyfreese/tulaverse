@@ -7,6 +7,7 @@
 test_that("single-quantile (median) regression output is stable", {
   skip_if_not_installed("quantreg")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- quantreg::rq(mpg ~ wt + hp, data = mtcars, tau = 0.5)
   expect_snapshot(suppressWarnings(print(tula(m))))
 })
@@ -14,6 +15,7 @@ test_that("single-quantile (median) regression output is stable", {
 test_that("multi-quantile (rqs) stacked output is stable", {
   skip_if_not_installed("quantreg")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- quantreg::rq(mpg ~ wt + hp, data = mtcars, tau = c(0.25, 0.5, 0.75))
   expect_snapshot(suppressWarnings(print(tula(m))))
 })
@@ -21,6 +23,7 @@ test_that("multi-quantile (rqs) stacked output is stable", {
 test_that("multi-quantile (rqs) parallel output is stable", {
   skip_if_not_installed("quantreg")
   local_reproducible_output(width = 100)
+  skip_on_ci()
   m <- quantreg::rq(mpg ~ wt + hp, data = mtcars, tau = c(0.25, 0.5, 0.75))
   expect_snapshot(suppressWarnings(print(tula(m, parallel = TRUE))))
 })

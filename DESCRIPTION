@@ -16,11 +16,12 @@ Description: Provides Stata-inspired console output for regression models,
     statistics. A ggplot2 theme (theme_tula()) and matching color scales
     provide plotting defaults closer to those used by Stata.
 License: MIT + file LICENSE
+Depends: R (>= 4.1)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports: stats, ggplot2 (>= 3.5.2)
 Suggests: knitr, rmarkdown, MASS, nnet, ordinal, quantreg, survival,
     sandwich, haven, fixest, AER, survey, restriktor,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0), withr
 Config/testthat/edition: 3

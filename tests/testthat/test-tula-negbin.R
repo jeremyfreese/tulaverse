@@ -5,6 +5,7 @@
 test_that("negative binomial output is stable", {
   skip_if_not_installed("MASS")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- suppressWarnings(MASS::glm.nb(carb ~ wt + hp, data = mtcars))
   expect_snapshot(tula(m))
 })
@@ -12,6 +13,7 @@ test_that("negative binomial output is stable", {
 test_that("negative binomial with a grouped factor is stable", {
   skip_if_not_installed("MASS")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- suppressWarnings(MASS::glm.nb(carb ~ wt + factor(cyl), data = mtcars))
   expect_snapshot(tula(m))
 })

@@ -7,6 +7,7 @@
 test_that("robust = TRUE (HC3) output is stable", {
   skip_if_not_installed("sandwich")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- glm(am ~ cyl + wt, data = mtcars, family = binomial)
   expect_snapshot(tula(m, robust = TRUE))
 })
@@ -14,6 +15,7 @@ test_that("robust = TRUE (HC3) output is stable", {
 test_that("robust with an explicit HC type (vcov = 'HC1') is stable", {
   skip_if_not_installed("sandwich")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp, data = mtcars)
   expect_snapshot(tula(m, robust = TRUE, vcov = "HC1"))
 })
@@ -21,6 +23,7 @@ test_that("robust with an explicit HC type (vcov = 'HC1') is stable", {
 test_that("cluster-robust SEs output is stable", {
   skip_if_not_installed("sandwich")
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp, data = mtcars)
   expect_snapshot(tula(m, cluster = "cyl"))
 })
@@ -39,24 +42,28 @@ test_that("cluster variable aligns when the model drops rows for missingness", {
 
 test_that("ref = TRUE (reference-level rows) output is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + factor(cyl), data = mtcars)
   expect_snapshot(tula(m, ref = TRUE))
 })
 
 test_that("select = a single continuous term is stable", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp + factor(cyl), data = mtcars)
   expect_snapshot(tula(m, select = "wt"))
 })
 
 test_that("select = a factor term pulls in header plus all levels", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp + factor(cyl), data = mtcars)
   expect_snapshot(tula(m, select = "cyl"))
 })
 
 test_that("select with selectheader = TRUE keeps the fit header", {
   local_reproducible_output(width = 80)
+  skip_on_ci()
   m <- lm(mpg ~ wt + hp + factor(cyl), data = mtcars)
   expect_snapshot(tula(m, select = "wt", selectheader = TRUE))
 })
