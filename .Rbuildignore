@@ -6,3 +6,4 @@
 ^theme_tula.*_gallery\.(R|png)$
 ^docs$
 ^\.claude$
+^\.github$
