@@ -19,50 +19,18 @@
 )
 
 
-#' Create a ggplot with Stata-inspired defaults
-#'
-#' A thin wrapper around [ggplot2::ggplot()] that automatically applies
-#' [theme_tula()] for Stata-inspired appearance with larger text. The returned
-#' object is a standard ggplot and can be modified with any ggplot2 function.
-#' Any subsequent theme settings added by the user are layered on top of the
-#' defaults, following normal ggplot2 layering rules.
-#'
-#' @param data A data frame (or tibble, or data frame extension).
-#' @param mapping Default list of aesthetic mappings to use for the plot,
-#'   created by [ggplot2::aes()].
-#' @param ... Additional arguments passed to [ggplot2::ggplot()].
-#' @param base_size Base font size in points (default 14). All text elements
-#'   scale relative to this value.
-#'
-#' @return A ggplot object with [theme_tula()] applied.
-#'
-#' @examples
-#' tulaplot(mtcars, ggplot2::aes(x = wt, y = mpg)) +
-#'   ggplot2::geom_point()
-#'
-#' # Color scale added separately when needed:
-#' tulaplot(mtcars, ggplot2::aes(x = wt, y = mpg, color = factor(cyl))) +
-#'   ggplot2::geom_point() +
-#'   scale_color_tula()
-#'
-#' @export
-tulaplot <- function(data = NULL, mapping = ggplot2::aes(), ...,
-                     base_size = 14) {
-  ggplot2::ggplot(data = data, mapping = mapping, ...) +
-    theme_tula(base_size = base_size)
-}
-
-
 #' Stata-inspired ggplot2 theme with larger text
 #'
 #' A complete ggplot2 theme inspired by Stata 18's `stcolor` graph scheme:
-#' white backgrounds, light gray dashed grid lines, black axis lines, and
-#' enlarged text for readability in teaching and presentation contexts.
+#' white backgrounds, faint gray grid lines, black axis lines, and enlarged
+#' text for readability in teaching and presentation contexts.
+#' `theme_tula_darkmode()` is the dark-mode counterpart — the same layout with a
+#' dark background, light foreground, and light geom outlines.
 #'
-#' Can be used standalone (`ggplot(...) + theme_tula()`) or is applied
-#' automatically by [tulaplot()]. Any theme elements the user adds
-#' afterward override the defaults set here, following normal ggplot2
-#' layering rules.
+#' Add it to any plot with `ggplot(...) + theme_tula()`. Any theme elements the
+#' user adds afterward override the defaults set here, following normal ggplot2
+#' layering rules. Pair with [scale_color_tula()] / [scale_fill_tula()] for the
+#' matching Stata `stcolor` palette.
 #'
 #' @param base_size Base font size in points (default 14). All other text
 #'   sizes are computed relative to this value. The ggplot2 default is 11;
@@ -77,12 +45,39 @@ tulaplot <- function(data = NULL, mapping = ggplot2::aes(), ...,
 #'   geom_point() +
 #'   theme_tula()
 #'
+#' # Dark mode:
+#' ggplot(mtcars, aes(x = wt, y = mpg)) +
+#'   geom_point() +
+#'   theme_tula_darkmode()
+#'
 #' @export
 theme_tula <- function(base_size = 14, base_family = "sans") {
-  # Per-geom defaults for filled geoms: thin black outlines.
-  # GeomBar covers geom_bar(), geom_col(), and geom_histogram().
-  # These are global (session-wide) but take priority over element_geom().
-  ggplot2::update_geom_defaults("bar", list(colour = "black", linewidth = 0.3))
+  .tula_build_theme(base_size, base_family, dark = FALSE)
+}
+
+#' @rdname theme_tula
+#' @export
+theme_tula_darkmode <- function(base_size = 14, base_family = "sans") {
+  .tula_build_theme(base_size, base_family, dark = TRUE)
+}
+
+# Shared theme builder. `dark` selects the color palette; the layout, sizing,
+# and geom defaults are identical between the light and dark variants so the
+# two never drift apart.
+.tula_build_theme <- function(base_size, base_family, dark) {
+  if (dark) {
+    fg           <- "#E6E6E6"   # foreground: text, lines, axes, ticks
+    bg           <- "#1E1E1E"   # panel / plot / legend background
+    grid         <- "#3D3D3D"   # faint grid, a bit lighter than the bg
+    strip        <- "#2E2E2E"   # facet strip, a bit lighter than the bg
+    geom_outline <- "#E6E6E6"   # light outlines for points/lines/bar borders
+  } else {
+    fg           <- "#000000"
+    bg           <- "#FFFFFF"
+    grid         <- "#E6E6E6"   # faint grid, a bit darker than the bg
+    strip        <- "#F2F2F2"
+    geom_outline <- "black"
+  }
 
   half_line <- base_size / 2
 
@@ -91,7 +86,7 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
     text = ggplot2::element_text(
       family     = base_family,
       face       = "plain",
-      colour     = "#000000",
+      colour     = fg,
       size       = base_size,
       hjust      = 0.5,
       vjust      = 0.5,
@@ -103,20 +98,20 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
 
     # --- Line and rect defaults ---
     line = ggplot2::element_line(
-      colour    = "#000000",
+      colour    = fg,
       linewidth = 0.5,
       linetype  = 1,
       lineend   = "butt"
     ),
     rect = ggplot2::element_rect(
-      fill      = "#FFFFFF",
+      fill      = bg,
       colour    = NA,
       linewidth = 0.5,
       linetype  = 1
     ),
 
     # --- Plot (outer canvas) ---
-    plot.background = ggplot2::element_rect(fill = "#FFFFFF", colour = NA),
+    plot.background = ggplot2::element_rect(fill = bg, colour = NA),
     plot.title = ggplot2::element_text(
       size   = ggplot2::rel(1.286),
       face   = "bold",
@@ -136,35 +131,35 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
     plot.margin = ggplot2::margin(half_line, half_line, half_line, half_line),
 
     # --- Panel (plot area) ---
-    panel.background = ggplot2::element_rect(fill = "#FFFFFF", colour = NA),
+    panel.background = ggplot2::element_rect(fill = bg, colour = NA),
     panel.border     = ggplot2::element_blank(),
     panel.spacing    = ggplot2::unit(half_line, "pt"),
 
-    # --- Grid lines (light gray, dashed, major only) ---
+    # --- Grid lines (faint, solid, major only) ---
     panel.grid.major = ggplot2::element_line(
-      colour    = "#D9D9D9",
+      colour    = grid,
       linewidth = 0.4,
-      linetype  = "dashed"
+      linetype  = "solid"
     ),
     panel.grid.minor = ggplot2::element_blank(),
 
     # --- Axes ---
     axis.line = ggplot2::element_line(
-      colour    = "#000000",
+      colour    = fg,
       linewidth = 0.4
     ),
     axis.ticks = ggplot2::element_line(
-      colour    = "#000000",
+      colour    = fg,
       linewidth = 0.4
     ),
     axis.ticks.length = ggplot2::unit(half_line / 2, "pt"),
     axis.text = ggplot2::element_text(
       size   = ggplot2::rel(0.857),
-      colour = "#000000"
+      colour = fg
     ),
     axis.title = ggplot2::element_text(
       size   = ggplot2::rel(1.0),
-      colour = "#000000"
+      colour = fg
     ),
     axis.title.x = ggplot2::element_text(
       margin = ggplot2::margin(t = half_line)
@@ -183,11 +178,11 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
 
     # --- Legend ---
     legend.background = ggplot2::element_rect(
-      fill   = "#FFFFFF",
+      fill   = bg,
       colour = NA
     ),
     legend.key = ggplot2::element_rect(
-      fill   = "#FFFFFF",
+      fill   = bg,
       colour = NA
     ),
     legend.key.size  = ggplot2::unit(1.2, "lines"),
@@ -200,12 +195,12 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
 
     # --- Facet strips ---
     strip.background = ggplot2::element_rect(
-      fill   = "#F2F2F2",
+      fill   = strip,
       colour = NA
     ),
     strip.text = ggplot2::element_text(
       size   = ggplot2::rel(0.929),
-      colour = "#000000",
+      colour = fg,
       margin = ggplot2::margin(
         t = half_line / 2, b = half_line / 2,
         l = half_line,     r = half_line
@@ -213,12 +208,14 @@ theme_tula <- function(base_size = 14, base_family = "sans") {
     ),
 
     # --- Default geom aesthetics ---
-    # colour = black for points, lines, and borders; fill = stc1 blue for
-    # bars/histograms/areas. Bar outlines are set to thin black above via
-    # update_geom_defaults().
+    # colour = foreground for points, lines, and borders; fill = stc1 blue for
+    # bars/histograms/areas; borderwidth = 0.3 gives filled geoms thin outlines.
+    # This is theme-scoped (applies only to plots using the theme, reverts
+    # automatically) — no session-wide update_geom_defaults() side effect.
     geom = ggplot2::element_geom(
-      colour = "black",
-      fill   = "#1A85FF"
+      colour      = geom_outline,
+      fill        = "#1A85FF",
+      borderwidth = 0.3
     ),
 
     complete = TRUE

@@ -43,9 +43,10 @@ tula.restriktor <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     tryCatch(nrow(stats::model.frame(orig)), error = function(e2) NA_integer_)
   })
 
-  # Determine underlying model type and build headers/family_label
-  is_glm <- inherits(orig, "glm") && !inherits(orig, "lm") ||
-            (inherits(orig, "glm") && !is.null(orig$family))
+  # Determine underlying model type and build headers/family_label.
+  # (A glm always inherits "lm" and always carries a $family, so the earlier
+  # compound test reduced to this.)
+  is_glm <- inherits(orig, "glm")
   is_rlm <- inherits(orig, "rlm")
 
   if (is_glm) {
@@ -68,7 +69,7 @@ tula.restriktor <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     )
     value_fmts <- c("Log likelihood" = "f3")
 
-    exp_label <- if (exp) {
+    exp_label <- if (isTRUE(exp)) {
       if (lnk == "logit") "Odds Ratio"
       else if (lnk == "log") "IRR"
       else NULL

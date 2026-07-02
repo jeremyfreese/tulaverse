@@ -38,20 +38,10 @@ tula.rq <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     } else NULL
   }
 
-  # Header metrics
-  # Raw sum of deviations (sum of weighted absolute residuals for fitted model)
-  wt_resid <- ifelse(model$residuals >= 0,
-                     tau * abs(model$residuals),
-                     (1 - tau) * abs(model$residuals))
-  raw_sum <- sum(wt_resid)
-
-  # Min sum of deviations (from the fitted model)
-  min_sum <- sum(ifelse(model$residuals >= 0,
-                        tau * model$residuals,
-                        (1 - tau) * model$residuals))
-  # Actually min_sum is the objective value from the fitted model
-  # raw_sum is the objective value from the null (intercept-only) model
-  # Let's compute both properly:
+  # Header metrics.  The Koenker-Bassett pseudo-R2 compares two objective
+  # values, each the sum of asymmetrically weighted (check-function) residuals:
+  #   raw_sum_dev - the null (intercept-only) model's objective
+  #   min_sum_dev - the fitted model's objective
 
   # Null model: intercept-only quantile regression
   y <- model$y

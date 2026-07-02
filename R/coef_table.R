@@ -54,9 +54,9 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     mm          <- tryCatch(model.matrix(model), error = function(e) NULL)
     assign_vec  <- if (!is.null(mm)) {
       av <- attr(mm, "assign")
-      if (!is.null(av)) av else rep(seq_along(coef_names) - 1L, 1L)
+      if (!is.null(av)) av else seq_along(coef_names) - 1L
     } else {
-      rep(seq_along(coef_names) - 1L, 1L)  # fallback: 0,1,2,...
+      seq_along(coef_names) - 1L  # fallback: 0,1,2,...
     }
     term_labels <- if (!is.null(mm))
       attr(terms(model), "term.labels") else character(0)

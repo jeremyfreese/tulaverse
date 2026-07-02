@@ -53,7 +53,18 @@
       cluster_vec <- tryCatch({
         od <- eval(model$call$data,
                    envir = environment(stats::formula(model)))
-        if (!is.null(od) && cluster_arg %in% names(od)) od[[cluster_arg]] else NULL
+        if (!is.null(od) && cluster_arg %in% names(od)) {
+          cv <- od[[cluster_arg]]
+          # The raw data includes rows the model dropped for missingness.
+          # Subset to the estimation sample using na.action (na.omit /
+          # na.exclude record the dropped row indices) so the cluster vector
+          # aligns with the model's residuals rather than the full data.
+          na_act <- model$na.action
+          if (!is.null(na_act) && length(na_act) > 0L) {
+            cv <- cv[-as.integer(na_act)]
+          }
+          cv
+        } else NULL
       }, error = function(e) NULL)
     }
 
@@ -61,6 +72,20 @@
       stop(
         "cluster variable '", cluster_arg,
         "' not found in the model frame or data.",
+        call. = FALSE
+      )
+    }
+
+    # Guard against a cluster vector that doesn't match the estimation sample
+    # (e.g. rows dropped for missingness that na.action didn't record). Erroring
+    # here is clearer than letting sandwich::vcovCL() misalign silently.
+    n_used <- tryCatch(stats::nobs(model), error = function(e) NA_integer_)
+    if (!is.na(n_used) && length(cluster_vec) != n_used) {
+      stop(
+        "cluster variable '", cluster_arg, "' has length ",
+        length(cluster_vec), " but the model used ", n_used,
+        " observations.\nIt could not be aligned to the model's estimation ",
+        "sample; supply a cluster vector matching the rows the model used.",
         call. = FALSE
       )
     }
@@ -77,7 +102,7 @@
       }
     )
 
-    cluster_n <- length(unique(cluster_vec))
+    cluster_n <- length(unique(cluster_vec[!is.na(cluster_vec)]))
     return(list(vcov_mat  = vcov_mat,
                 se_label  = "Robust SE",
                 cluster_n = cluster_n))

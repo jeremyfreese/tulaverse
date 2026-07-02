@@ -84,11 +84,18 @@ print.tula_codebook <- function(x, ...) {
   is_haven      <- inherits(col, "haven_labelled")
   haven_labels  <- attr(col, "labels", exact = TRUE)
   has_val_labels <- !is.null(haven_labels) && length(haven_labels) > 0L
+  # haven_labelled may wrap a character vector, not just numeric. Track that so
+  # the numeric-only paths (range, units, mean/sd, as.numeric) are skipped.
+  haven_char    <- is_haven && is.character(unclass(col))
 
   if (is_haven) {
     raw_vec   <- unclass(col)
-    r_storage <- if (is.integer(raw_vec)) "int" else "float"
-    type_desc <- paste0("Numeric (", r_storage, ")")
+    if (haven_char) {
+      type_desc <- "Labelled string"
+    } else {
+      r_storage <- if (is.integer(raw_vec)) "int" else "float"
+      type_desc <- paste0("Numeric (", r_storage, ")")
+    }
     base_type <- "numeric"
   } else if (is.ordered(col)) {
     type_desc <- "Ordered factor"
@@ -126,8 +133,10 @@ print.tula_codebook <- function(x, ...) {
     # Count only levels that actually appear (not unused levels)
     n_unique <- length(unique(as.character(non_na)))
   } else {
-    # numeric, integer, logical, haven_labelled
-    n_unique <- length(unique(as.numeric(non_na)))
+    # numeric, integer, logical, haven_labelled. Count distinct underlying
+    # values (unclass handles both numeric- and character-backed haven; blind
+    # as.numeric() would collapse a character-backed vector to a single NA).
+    n_unique <- length(unique(unclass(non_na)))
   }
 
   # --- Display mode decision -----------------------------------------------
@@ -149,13 +158,14 @@ print.tula_codebook <- function(x, ...) {
   range_max <- NULL
   units     <- NULL
 
-  if (base_type %in% c("numeric", "integer") || is_haven) {
+  if ((base_type %in% c("numeric", "integer") || is_haven) && !haven_char) {
     num_vals <- as.numeric(non_na)
     if (length(num_vals) > 0L) {
       range_min <- min(num_vals)
       range_max <- max(num_vals)
-      # Units: only for integer-like data
-      all_integer_like <- all(num_vals == round(num_vals))
+      # Units: only for integer-like data. isTRUE() guards against a stray NA
+      # (all(NA) is NA, which would error the following if()).
+      all_integer_like <- isTRUE(all(num_vals == round(num_vals)))
       if (all_integer_like) {
         units <- .compute_units(num_vals)
       }
@@ -167,7 +177,7 @@ print.tula_codebook <- function(x, ...) {
   sd_val   <- NULL
   pctiles  <- NULL
 
-  if (display_mode == "continuous") {
+  if (display_mode == "continuous" && !haven_char) {
     num_vals <- as.numeric(non_na)
     if (length(num_vals) > 0L) {
       mean_val <- mean(num_vals)
@@ -270,26 +280,33 @@ print.tula_codebook <- function(x, ...) {
   }
 
   if (is_haven) {
-    # Build code -> label lookup from haven labels attribute
-    code_to_label <- if (!is.null(haven_labels) && length(haven_labels) > 0L) {
-      stats::setNames(names(haven_labels),
-                      as.character(as.numeric(haven_labels)))
-    } else {
-      character(0)
+    # Underlying values (numeric or character) — never blindly as.numeric(),
+    # which turns a character-backed labelled vector into all-NA.
+    raw <- unclass(non_na)
+
+    # Code -> label lookup, keyed by the string form of the underlying code.
+    # Keying via as.character(unclass(labels)) matches the table names built
+    # below (both go through as.character on the same underlying type), so the
+    # join is exact. De-duplicate keys: haven permits two labels on one code;
+    # keep the first rather than let setNames() silently drop one.
+    code_to_label <- character(0)
+    if (!is.null(haven_labels) && length(haven_labels) > 0L) {
+      lab_keys <- as.character(unclass(haven_labels))
+      keep     <- !duplicated(lab_keys)
+      code_to_label <- stats::setNames(names(haven_labels)[keep], lab_keys[keep])
     }
 
-    tbl   <- table(as.numeric(non_na))
+    # table(raw) preserves numeric ordering for numeric-backed vectors and
+    # names the rows via as.character on the same underlying values.
+    tbl   <- table(raw)
     freqs <- as.integer(tbl)
     vals  <- names(tbl)
 
-    labels_vec <- vapply(vals, function(v) {
-      lbl <- code_to_label[v]
-      if (is.na(lbl)) NA_character_ else lbl
-    }, character(1L), USE.NAMES = FALSE)
+    labels_vec <- unname(code_to_label[vals])   # NA where a code has no label
 
     return(data.frame(
       value     = vals,
-      num_value = as.numeric(vals),
+      num_value = suppressWarnings(as.numeric(vals)),
       label     = labels_vec,
       freq      = freqs,
       stringsAsFactors = FALSE

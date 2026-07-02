@@ -21,6 +21,21 @@
 }
 
 
+# Normalise a logical vector to a genuine two-level factor (FALSE before TRUE,
+# observed levels only) so the rest of the tabulate/crosstab pipeline — which
+# relies on levels() and factor dispatch — treats it as an ordinary
+# categorical. A "label" attribute (haven-style) is preserved. Non-logical
+# vectors pass through unchanged. Applied to y/x/by vectors at ingestion.
+.coerce_tab_logical <- function(vec) {
+  if (!is.logical(vec)) return(vec)
+  lbl <- attr(vec, "label", exact = TRUE)
+  f   <- factor(vec, levels = c("FALSE", "TRUE"))
+  f   <- droplevels(f)
+  if (!is.null(lbl)) attr(f, "label") <- lbl
+  f
+}
+
+
 # Simple right-truncation for tab labels.
 # Unlike .truncate_label() (word-boundary logic), this just cuts and appends ~.
 .truncate_tab_label <- function(lbl, width) {
@@ -404,8 +419,10 @@
         n_vals[i]    <- as.integer(grp_ns[[key]])
       }
     } else {
-      # factor / ordered / character: match by trimmed display label
-      key <- trimws(row$value)
+      # factor / ordered / character: value holds the raw level (names(table)),
+      # which is exactly how grp_means is keyed — match on it directly.  (Do
+      # not trim: a level may legitimately contain leading/trailing spaces.)
+      key <- row$value
       if (key %in% names(grp_means)) {
         mean_vals[i] <- grp_means[[key]]
         n_vals[i]    <- as.integer(grp_ns[[key]])
@@ -1044,7 +1061,9 @@
       key  <- as.character(row$num_value)
       vals <- if (key %in% names(grp_vals)) grp_vals[[key]] else numeric(0)
     } else {
-      key  <- trimws(row$value)
+      # factor / ordered / character: match on the raw level directly (see
+      # .compute_oneway_means — value is names(table), not a display label).
+      key  <- row$value
       vals <- if (key %in% names(grp_vals)) grp_vals[[key]] else numeric(0)
     }
 

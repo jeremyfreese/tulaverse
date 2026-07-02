@@ -13,12 +13,14 @@ Description: Provides Stata-inspired console output for regression models,
     regression, fixed effects models, tobit and survival regression,
     survey-weighted GLMs, and constrained estimation). The tulatab() function produces one-way frequency tables
     and two-way crosstabulations with optional means and other summary
-    statistics. Plotting functions (tulaplot(), theme_tula()) provide
-    ggplot2 integration with defaults closer to those used by Stata.
+    statistics. A ggplot2 theme (theme_tula()) and matching color scales
+    provide plotting defaults closer to those used by Stata.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Imports: stats, ggplot2 (>= 3.5.0)
+Imports: stats, ggplot2 (>= 3.5.2)
 Suggests: knitr, rmarkdown, MASS, nnet, ordinal, quantreg, survival,
-    sandwich, haven, fixest, AER, survey, restriktor
+    sandwich, haven, fixest, AER, survey, restriktor,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

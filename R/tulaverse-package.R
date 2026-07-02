@@ -14,9 +14,10 @@
 #'   \item{[tulatab()]}{One-way frequency tables and two-way crosstabs,
 #'     with optional means (or any subset of `mean`/`median`/`sd`/`n`/
 #'     percentiles via `stat=`) and panel-by grouping.}
-#'   \item{[tulaplot()] / [theme_tula()] / [scale_color_tula()] /
-#'     [scale_fill_tula()]}{ggplot2 wrappers using Stata 18's `stcolor`
-#'     palette and larger default text.}
+#'   \item{[theme_tula()] / [theme_tula_darkmode()] / [scale_color_tula()] /
+#'     [scale_fill_tula()]}{A ggplot2 theme (with a dark-mode variant) and
+#'     matching discrete scales using Stata 18's `stcolor` palette and larger
+#'     default text, composed into a standard `ggplot()`.}
 #' }
 #'
 #' @section Output pipeline (for contributors):

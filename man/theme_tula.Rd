@@ -2,9 +2,12 @@
 % Please edit documentation in R/tulaplot.R
 \name{theme_tula}
 \alias{theme_tula}
+\alias{theme_tula_darkmode}
 \title{Stata-inspired ggplot2 theme with larger text}
 \usage{
 theme_tula(base_size = 14, base_family = "sans")
+
+theme_tula_darkmode(base_size = 14, base_family = "sans")
 }
 \arguments{
 \item{base_size}{Base font size in points (default 14). All other text
@@ -18,19 +21,26 @@ A \code{\link[ggplot2:theme]{ggplot2::theme()}} object.
 }
 \description{
 A complete ggplot2 theme inspired by Stata 18's \code{stcolor} graph scheme:
-white backgrounds, light gray dashed grid lines, black axis lines, and
-enlarged text for readability in teaching and presentation contexts.
+white backgrounds, faint gray grid lines, black axis lines, and enlarged
+text for readability in teaching and presentation contexts.
+\code{theme_tula_darkmode()} is the dark-mode counterpart — the same layout with a
+dark background, light foreground, and light geom outlines.
 }
 \details{
-Can be used standalone (\code{ggplot(...) + theme_tula()}) or is applied
-automatically by \code{\link[=tulaplot]{tulaplot()}}. Any theme elements the user adds
-afterward override the defaults set here, following normal ggplot2
-layering rules.
+Add it to any plot with \code{ggplot(...) + theme_tula()}. Any theme elements the
+user adds afterward override the defaults set here, following normal ggplot2
+layering rules. Pair with \code{\link[=scale_color_tula]{scale_color_tula()}} / \code{\link[=scale_fill_tula]{scale_fill_tula()}} for the
+matching Stata \code{stcolor} palette.
 }
 \examples{
 library(ggplot2)
 ggplot(mtcars, aes(x = wt, y = mpg)) +
   geom_point() +
   theme_tula()
+
+# Dark mode:
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  theme_tula_darkmode()
 
 }

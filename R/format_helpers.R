@@ -28,8 +28,14 @@
 #
 # x      - numeric scalar
 # digits - number of significant digits (default 4)
-# width  - column width in characters (default 10)
-# Returns: character string of exactly `width` characters.
+# width  - MINIMUM column width in characters (default 10)
+# Returns: the value right-justified to at least `width` characters. If the
+#   value's representation is wider than `width`, the natural (wider) string is
+#   returned intact rather than truncated. Column-laying callers pass a width
+#   computed from the widest value (so padding applies); the parallel-mode
+#   formatters pass `width = 1L` and trimws() the result to obtain the
+#   natural-width number string for measuring columns. Because of that idiom,
+#   this function must never truncate to `width`.
 fmt_num <- function(x, digits = 4, width = 10) {
   if (is.na(x)) return(strrep(" ", width))
   s <- formatC(x, digits = digits, format = "fg", flag = " ")

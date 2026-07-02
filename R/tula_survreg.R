@@ -28,8 +28,12 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   ct        <- ct_full[seq_len(n_pred), , drop = FALSE]
   log_scale_row <- if (has_scale) ct_full[n_pred + 1L, ] else NULL
 
-  # --- stat label (Stata tobit uses t) --------------------------------------
-  stat_label <- "t"
+  # --- stat label ------------------------------------------------------------
+  # summary(survreg) reports a normal-based statistic (column "z", p-values
+  # 2*pnorm(-|z|)), and the robust path below uses df = Inf.  Label it "z" so
+  # the header matches the computation.  (Stata's tobit reports t, but tula
+  # does not recompute with residual df, so "t" would misrepresent the values.)
+  stat_label <- "z"
 
   # --- Robust SE (standard pipeline; vcovHC fails for survreg but
   #     .resolve_robust_vcov() falls back to sandwich::sandwich()) -----------

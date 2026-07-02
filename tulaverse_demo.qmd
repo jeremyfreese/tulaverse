@@ -306,21 +306,22 @@ A `by =` variable produces one crosstab per panel:
 tulatab(happy, degree, data = gss, by = sex)
 ```
 
-# tulaplot()
+# theme_tula()
 
 ## Visualization
 
-`tulaplot()` is a thin wrapper around `ggplot()` that applies a clean theme
-with larger text and sensible defaults:
+`theme_tula()` is a ggplot2 theme applying a clean look with larger text and
+sensible defaults --- add it to any `ggplot()`:
 
 ```{r}
 #| fig-width: 7
 #| fig-height: 5
-tulaplot(gss, ggplot2::aes(x = educ, y = realrinc)) +
+ggplot2::ggplot(gss, ggplot2::aes(x = educ, y = realrinc)) +
   ggplot2::geom_point(alpha = 0.3) +
   ggplot2::geom_smooth(method = "lm", se = FALSE) +
   ggplot2::labs(x = "Years of education", y = "Income (constant $)",
-                title = "Education and income, GSS 2024")
+                title = "Education and income, GSS 2024") +
+  theme_tula()
 ```
 
 Use `scale_fill_tula()` for a matching color palette:
@@ -328,10 +329,11 @@ Use `scale_fill_tula()` for a matching color palette:
 ```{r}
 #| fig-width: 7
 #| fig-height: 5
-tulaplot(gss[!is.na(gss$degree) & !is.na(gss$happy), ],
-         ggplot2::aes(x = as_factor(degree), fill = as_factor(happy))) +
+ggplot2::ggplot(gss[!is.na(gss$degree) & !is.na(gss$happy), ],
+                ggplot2::aes(x = as_factor(degree), fill = as_factor(happy))) +
   ggplot2::geom_bar(position = "fill") +
   scale_fill_tula() +
+  theme_tula() +
   ggplot2::labs(x = "Highest degree", y = "Proportion", fill = "Happiness",
                 title = "Happiness by education level, GSS 2024") +
   ggplot2::scale_y_continuous(labels = scales::percent)

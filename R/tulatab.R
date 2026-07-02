@@ -120,6 +120,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
     y_vec  <- y
     y_name <- .extract_var_name(y_expr)
   }
+  y_vec <- .coerce_tab_logical(y_vec)
 
   # --- Detect whether by was supplied ---------------------------------------
   has_by <- !missing(by) && !is.null(by_expr) && !identical(by_expr, quote(NULL))
@@ -132,6 +133,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
       by_vec  <- by
       by_name <- .extract_var_name(by_expr)
     }
+    by_vec <- .coerce_tab_logical(by_vec)
   }
 
   # --- Detect whether mean was supplied -------------------------------------
@@ -181,6 +183,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
       x_vec  <- x
       x_name <- .extract_var_name(x_expr)
     }
+    x_vec <- .coerce_tab_logical(x_vec)
 
     # Guard: catch accidentally passing a data frame as x
     if (is.data.frame(x_vec)) {

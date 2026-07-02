@@ -288,7 +288,7 @@ via \code{\link[ordinal:clm]{ordinal::clm()}}), \code{coxph} (Cox proportional h
 \code{\link[survival:coxph]{survival::coxph()}}), \code{clogit} (conditional logistic regression via
 \code{\link[survival:clogit]{survival::clogit()}}), \code{rq} and \code{rqs} (quantile regression via
 \code{\link[quantreg:rq]{quantreg::rq()}}), \code{fixest} (fixed effects models via \code{\link[fixest:feols]{fixest::feols()}},
-\code{\link[fixest:feglm]{fixest::feglm()}}, \code{\link[fixest:fepois]{fixest::fepois()}}, \code{fixest::fenegbin()}),
+\code{\link[fixest:feglm]{fixest::feglm()}}, \code{\link[fixest:feglm]{fixest::fepois()}}, \code{fixest::fenegbin()}),
 \code{survreg} (tobit / survival regression via \code{\link[AER:tobit]{AER::tobit()}} or
 \code{\link[survival:survreg]{survival::survreg()}}), \code{svyglm} (survey-weighted GLMs via
 \code{\link[survey:svyglm]{survey::svyglm()}}), and \code{restriktor} (constrained linear / GLM

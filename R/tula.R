@@ -146,9 +146,8 @@ tula <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   }
 
   # --- Standard S3 dispatch ------------------------------------------------
-  # Capture the expression used for `model` before dispatch, so that vector
-  # methods can display a meaningful variable name (e.g. "mtcars$mpg").
-  .tula_call_nm <- deparse(substitute(model))
+  # (The vector/summarize methods recover the printed variable name themselves
+  # from the generic's call via sys.call() — see tula.default().)
   UseMethod("tula")
 }
 

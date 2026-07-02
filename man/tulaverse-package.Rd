@@ -21,9 +21,10 @@ frames and atomic vectors produce summary or codebook output.}
 \item{\code{\link[=tulatab]{tulatab()}}}{One-way frequency tables and two-way crosstabs,
 with optional means (or any subset of \code{mean}/\code{median}/\code{sd}/\code{n}/
 percentiles via \verb{stat=}) and panel-by grouping.}
-\item{\code{\link[=tulaplot]{tulaplot()}} / \code{\link[=theme_tula]{theme_tula()}} / \code{\link[=scale_color_tula]{scale_color_tula()}} /
-\code{\link[=scale_fill_tula]{scale_fill_tula()}}}{ggplot2 wrappers using Stata 18's \code{stcolor}
-palette and larger default text.}
+\item{\code{\link[=theme_tula]{theme_tula()}} / \code{\link[=theme_tula_darkmode]{theme_tula_darkmode()}} / \code{\link[=scale_color_tula]{scale_color_tula()}} /
+\code{\link[=scale_fill_tula]{scale_fill_tula()}}}{A ggplot2 theme (with a dark-mode variant) and
+matching discrete scales using Stata 18's \code{stcolor} palette and larger
+default text, composed into a standard \code{ggplot()}.}
 }
 }
 
