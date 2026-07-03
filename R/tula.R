@@ -375,7 +375,8 @@ new_tula_output <- function(model_type,
                             level          = 95,
                             outcome_levels = NULL,
                             se_label       = NULL,
-                            se_super       = NULL) {
+                            se_super       = NULL,
+                            ranef_df       = NULL) {
   structure(
     list(
       model_type     = model_type,
@@ -394,7 +395,8 @@ new_tula_output <- function(model_type,
       level          = level,
       outcome_levels = outcome_levels,
       se_label       = se_label,
-      se_super       = se_super
+      se_super       = se_super,
+      ranef_df       = ranef_df
     ),
     class = "tula_output"
   )
@@ -696,8 +698,9 @@ print.tula_output <- function(x, ...) {
   # Always use full coef_df for width so layout is consistent regardless
   # of which coefficients are selected.
   anc_labels <- if (!is.null(x$ancillary_df)) x$ancillary_df$label else character(0)
+  ranef_labels <- if (!is.null(x$ranef_df)) x$ranef_df$label else character(0)
   dep_label  <- if (!is.null(x$dep_var) && nchar(x$dep_var) > 0L) x$dep_var else character(0)
-  all_labels <- c(x$coef_df$label, anc_labels, dep_label)
+  all_labels <- c(x$coef_df$label, anc_labels, ranef_labels, dep_label)
 
   natural_width <- compute_total_width(
     header_left  = x$header_left,
@@ -766,6 +769,15 @@ print.tula_output <- function(x, ...) {
   }
 
   cat(paste(table_lines, collapse = "\n"), "\n", sep = "")
+
+  # Random-effects parameters section (mixed models). Printed as its own block
+  # below the fixed-effects table. In select mode, shown only with selectfooter.
+  show_ranef <- !is.null(x$ranef_df) && nrow(x$ranef_df) > 0L &&
+    (!select_mode || isTRUE(x$selectfooter))
+  if (show_ranef) {
+    ranef_lines <- format_ranef_section(x$ranef_df, x$wide, total_width)
+    cat(paste(ranef_lines, collapse = "\n"), "\n", sep = "")
+  }
 
   # Ordered-model footer: lowest and highest outcome levels, truncated to fit.
   # In select mode, only shown when selectfooter = TRUE.

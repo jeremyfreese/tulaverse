@@ -838,3 +838,60 @@ format_ancillary_rows <- function(ancillary_df, wide, total_width, level = 95) {
 
   lines
 }
+
+
+#' Format the random-effects parameters section for mixed models.
+#'
+#' Rendered as a self-contained block below the fixed-effects table (Stata
+#' `mixed`-style): a title line, then per-grouping-factor sub-headers with
+#' indented sd()/corr() rows, and a residual sd() row. Estimates align under
+#' the main table's Coef column; SE/stat/p columns are blank (lme4 does not
+#' provide cheap SEs for variance components).
+#'
+#' @param ranef_df Data frame with columns: label (chr), estimate (dbl; NA for
+#'   group sub-header rows), indent (lgl).
+#' @param wide Logical. Whether the coefficient table shows CI columns (for
+#'   column-width matching).
+#' @param total_width Integer. Total output line width (matches the coef table).
+#' @return Character vector of lines.
+#' @noRd
+format_ranef_section <- function(ranef_df, wide, total_width) {
+  cw_coef <- 10L
+  cw_se   <- 10L
+  cw_stat <- 10L
+  cw_pval <-  9L
+  cw_ci   <- 10L
+
+  num_cols_w <- 2L + cw_coef + 1L + cw_se + 1L + cw_stat + 1L + cw_pval
+  if (wide) num_cols_w <- num_cols_w + 1L + cw_ci + 1L + cw_ci
+
+  lbl_w <- total_width - num_cols_w
+  sep   <- char_rep(.BOX_H, total_width)
+
+  blank_se   <- strrep(" ", cw_se)
+  blank_stat <- strrep(" ", cw_stat)
+  blank_pval <- strrep(" ", cw_pval)
+  blank_ci   <- strrep(" ", cw_ci)
+
+  # Title line + separator (butts up against the coef table's closing sep).
+  title <- .truncate_label("Random-effects Parameters", total_width)
+  lines <- c(title, sep)
+
+  for (i in seq_len(nrow(ranef_df))) {
+    row      <- ranef_df[i, ]
+    disp_lbl <- if (isTRUE(row$indent)) paste0("  ", row$label) else row$label
+    lbl_fmt  <- pad_right(.truncate_label(disp_lbl, lbl_w), lbl_w)
+    est_str  <- fmt_num(row$estimate, width = cw_coef)  # blank when NA (headers)
+
+    if (wide) {
+      line <- paste0(lbl_fmt, " ", .BOX_V, est_str, " ", blank_se, " ",
+                     blank_stat, " ", blank_pval, " ", blank_ci, " ", blank_ci)
+    } else {
+      line <- paste0(lbl_fmt, " ", .BOX_V, est_str, " ", blank_se, " ",
+                     blank_stat, " ", blank_pval)
+    }
+    lines <- c(lines, line)
+  }
+
+  c(lines, sep)
+}

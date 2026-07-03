@@ -22,6 +22,6 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Imports: stats, ggplot2 (>= 4.0.0)
 Suggests: knitr, rmarkdown, MASS, nnet, ordinal, quantreg, survival,
-    sandwich, haven, fixest, AER, survey, restriktor,
+    sandwich, haven, fixest, AER, survey, restriktor, lme4,
     testthat (>= 3.0.0), withr
 Config/testthat/edition: 3
