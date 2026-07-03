@@ -57,15 +57,20 @@ tula.restriktor <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     ll <- tryCatch(as.numeric(model$loglik), error = function(e) NA_real_)
     dev      <- orig$deviance
     null_dev <- orig$null.deviance
-    mcfadden <- if (!is.null(dev) && !is.null(null_dev) && null_dev > 0)
+    pseudo_r2 <- if (!is.null(dev) && !is.null(null_dev) && null_dev > 0)
       1 - dev / null_dev else NA_real_
+    # 1 - dev/null_dev is McFadden's R² only for Bernoulli binomial (saturated
+    # LL = 0); otherwise it's the deviance R². Label to match tula.glm.
+    is_bernoulli_binomial <- identical(orig$family$family, "binomial") &&
+      !is.null(orig$prior.weights) && all(orig$prior.weights == 1)
+    r2_label <- if (is_bernoulli_binomial) "McFadden R-sq" else "Deviance R-sq"
 
     header_left <- c(
       if (!is.na(ll)) c("Log likelihood" = ll)
     )
     header_right <- c(
       "Number of obs" = n_obs,
-      if (!is.na(mcfadden)) c("McFadden R-sq" = mcfadden)
+      if (!is.na(pseudo_r2)) stats::setNames(pseudo_r2, r2_label)
     )
     value_fmts <- c("Log likelihood" = "f3")
 

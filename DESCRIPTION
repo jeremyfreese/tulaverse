@@ -1,7 +1,7 @@
 Package: tulaverse
 Type: Package
 Title: Stata-Inspired Console Output and Visualization for R
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: person("Jeremy", "Freese", email = "jfreese@stanford.edu",
                   role = c("aut", "cre"))
 Description: Provides Stata-inspired console output for regression models,
@@ -20,7 +20,7 @@ Depends: R (>= 4.1)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
-Imports: stats, ggplot2 (>= 3.5.2)
+Imports: stats, ggplot2 (>= 4.0.0)
 Suggests: knitr, rmarkdown, MASS, nnet, ordinal, quantreg, survival,
     sandwich, haven, fixest, AER, survey, restriktor,
     testthat (>= 3.0.0), withr

@@ -170,8 +170,10 @@ tula.default <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       deparse(match.call(gfn, mc)$model)
     }, error = function(e) "x")
     df <- stats::setNames(list(model), nm)
-    # Preserve factor class through as.data.frame
-    df <- as.data.frame(df, stringsAsFactors = FALSE)
+    # Preserve factor class through as.data.frame. check.names = FALSE keeps the
+    # non-syntactic column name (e.g. "df$f") intact; otherwise as.data.frame
+    # mangles it and the factor re-assignment below adds a duplicate column.
+    df <- as.data.frame(df, stringsAsFactors = FALSE, check.names = FALSE)
     if (is.factor(model)) df[[nm]] <- model
     if (isTRUE(codebook)) {
       return(.tula_codebook(df, width = width))
@@ -230,7 +232,10 @@ tula.data.frame <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   }
 
   df <- stats::setNames(cols, nms)
-  df <- as.data.frame(df, stringsAsFactors = FALSE)
+  # check.names = FALSE preserves non-syntactic names (e.g. "factor(cyl)") so
+  # the class-preserving re-assignment below replaces the column rather than
+  # adding a duplicate under the unmangled name.
+  df <- as.data.frame(df, stringsAsFactors = FALSE, check.names = FALSE)
 
   # Preserve factor class and haven-labelled class (as.data.frame can strip)
   for (k in seq_along(cols)) {

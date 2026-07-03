@@ -21,6 +21,19 @@
 }
 
 
+# Format a numeric value as a display string: whole numbers without a decimal
+# point, others as-is. Uses trunc() + non-scientific format() rather than
+# as.integer(), which returns NA (with a warning) for values beyond the 32-bit
+# integer range — e.g. large IDs or timestamps — and would crash `if (v == NA)`.
+.fmt_code_str <- function(v) {
+  if (is.finite(v) && v == trunc(v)) {
+    format(v, scientific = FALSE, trim = TRUE)
+  } else {
+    as.character(v)
+  }
+}
+
+
 # Normalise a logical vector to a genuine two-level factor (FALSE before TRUE,
 # observed levels only) so the rest of the tabulate/crosstab pipeline — which
 # relies on levels() and factor dispatch — treats it as an ordinary
@@ -248,11 +261,9 @@
 
     if (startsWith(key, "val:")) {
       num_val <- as.numeric(sub("^val:", "", key))
-      code_str <- as.character(num_val)
-      # Integer display: if the numeric value is a whole number, show without decimal
-      if (!is.na(num_val) && num_val == as.integer(num_val)) {
-        code_str <- as.character(as.integer(num_val))
-      }
+      # Integer-looking codes shown without a decimal; .fmt_code_str avoids the
+      # as.integer() overflow for large codes.
+      code_str <- if (!is.na(num_val)) .fmt_code_str(num_val) else as.character(num_val)
       lbl_text <- code_to_label[code_str]
       if (is.na(lbl_text)) lbl_text <- NA_character_
 
@@ -433,10 +444,16 @@
   # Replace NaN with NA
   mean_vals[is.nan(mean_vals)] <- NA_real_
 
-  # Overall
-  mean_total <- mean(mean_vec, na.rm = TRUE)
+  # Overall. The Total row must cover exactly the observations shown in the
+  # table: when missing rows are not displayed (missing = FALSE), observations
+  # with NA in the tabulated variable are excluded — otherwise the category Ns
+  # would not sum to the Total. tab_df carries missing rows only when they are
+  # displayed, so their presence is the include-missing signal.
+  include_missing <- any(tab_df$is_missing)
+  total_mask <- if (include_missing) rep(TRUE, length(vec)) else !is.na(vec)
+  mean_total <- mean(mean_vec[total_mask], na.rm = TRUE)
   if (is.nan(mean_total)) mean_total <- NA_real_
-  n_total    <- sum(!is.na(mean_vec))
+  n_total    <- sum(!is.na(mean_vec[total_mask]))
 
   list(
     mean_vals  = mean_vals,
@@ -1072,9 +1089,13 @@
     }
   }
 
-  # Grand totals
+  # Grand totals — over the observations shown in the table only (see
+  # .compute_oneway_means): exclude NA-y observations unless missing rows are
+  # displayed, so the category rows aggregate to the Total.
+  include_missing <- any(tab_df$is_missing)
+  total_vals <- if (include_missing) stat_vec else stat_vec[non_na]
   stat_grands <- vapply(stat_tokens, function(tok) {
-    .eval_stat(tok, stat_vec)
+    .eval_stat(tok, total_vals)
   }, numeric(1L))
 
   list(stat_mat = stat_mat, stat_grands = stat_grands)

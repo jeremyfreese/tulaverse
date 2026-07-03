@@ -4,7 +4,7 @@
       tula(m)
     Output
       AIC            = 15.908                                Number of obs =     32
-      BIC            = 24.703                                McFadden R-sq = 0.9444
+      BIC            = 24.703                                McFadden R-sq = 0.9425
       Log likelihood = -1.954                                                      
       ─────────────────────────────────────────────────────────────────────────────
       6           │      Coef  Std. Err.          z     P>|z|  [95% Conf  Interval]
@@ -27,7 +27,7 @@
       tula(m, parallel = TRUE)
     Output
       AIC            = 15.908            Number of obs =     32
-      BIC            = 24.703            McFadden R-sq = 0.9444
+      BIC            = 24.703            McFadden R-sq = 0.9425
       Log likelihood = -1.954                                  
       ─────────────────────────────────────────────────────────
       factor(cyl) │      6           8   

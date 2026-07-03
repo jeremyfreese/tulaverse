@@ -12,9 +12,14 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # --- ct: coefficient matrix (Estimate, SE, z, p) -------------------------
   # summary(coxph)$coefficients columns:
   #   coef, exp(coef), se(coef), z, Pr(>|z|)
+  # When the model was fit with robust = TRUE / cluster =, summary() adds a
+  # "robust se" column and the z / p are already robust-based; pick that SE so
+  # the printed SE is consistent with the z, p, and (robust) CI.
   ct_raw <- s$coefficients
-  ct <- ct_raw[, c("coef", "se(coef)", "z", "Pr(>|z|)"), drop = FALSE]
+  se_col <- if ("robust se" %in% colnames(ct_raw)) "robust se" else "se(coef)"
+  ct <- ct_raw[, c("coef", se_col, "z", "Pr(>|z|)"), drop = FALSE]
   colnames(ct) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
+  model_is_robust <- se_col == "robust se"
 
   # Apply robust SE if requested
   robust_info <- .resolve_robust_vcov(model, robust, vcov, cluster)
@@ -32,14 +37,16 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   n_events <- s$nevent
   ll       <- model$loglik[2L]   # model log-likelihood (loglik[1] = null)
 
-  # Time at risk: sum of survival times from the response
+  # Time at risk: total follow-up time from the response. For 2-column
+  # right-censored Surv(time, status) that is sum(time); for 3-column
+  # counting-process Surv(start, stop, status) it is sum(stop - start).
   time_at_risk <- tryCatch({
     y <- model$y
     if (is.null(y)) {
       mf <- stats::model.frame(model)
       y  <- mf[[1L]]
     }
-    sum(y[, 1L])
+    if (ncol(y) >= 3L) sum(y[, 2L] - y[, 1L]) else sum(y[, 1L])
   }, error = function(e) NA_real_)
 
   # Concordance (C-statistic)
@@ -89,7 +96,8 @@ tula.coxph <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     dep_var      = dep_var,
     exp_label    = if (isTRUE(exp)) "Haz. Ratio" else NULL,
     level        = level,
-    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
+    se_label     = if (!is.null(robust_info)) robust_info$se_label
+                   else if (model_is_robust) "Robust SE" else NULL
   )
   .attach_select(out, ...)
 }

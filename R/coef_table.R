@@ -69,6 +69,25 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
     assign_vec <- seq_along(coef_names)   # 1, 2, 3, ... — no intercept row
   }
 
+  # Realign assign_vec to the rows actually present in ct. For rank-deficient
+  # models, summary()/coef() drop aliased (NA) coefficients, so ct has fewer
+  # rows than model.matrix() has columns and a column-based assign vector is
+  # shifted — every coefficient after an aliased one would map to the wrong
+  # term. When the lengths disagree, match each retained coefficient name to
+  # its model-matrix column and take the assign index there. (No-op for
+  # full-rank models, where the names already line up 1:1.)
+  if (length(assign_vec) != length(coef_names)) {
+    mm_align <- tryCatch(model.matrix(model), error = function(e) NULL)
+    av_align <- if (!is.null(mm_align)) attr(mm_align, "assign") else NULL
+    if (!is.null(av_align) && !is.null(colnames(mm_align))) {
+      pos <- match(coef_names, colnames(mm_align))
+      assign_vec <- ifelse(is.na(pos), 0L, av_align[pos])
+    } else {
+      # Can't recover the mapping; fall back to sequential indices.
+      assign_vec <- seq_along(coef_names) - 1L
+    }
+  }
+
   if (is.null(data_classes)) {
     data_classes <- tryCatch(
       attr(terms(model), "dataClasses"),
@@ -108,12 +127,14 @@ build_coef_df <- function(model, ct, ci, wide, ref = FALSE, label = TRUE,
   # or name it differently (e.g. no parentheses) are handled correctly.
   intercept_positions <- which(assign_vec == 0L)
 
-  # Determine whether a term is a factor type
+  # Determine whether a term is a factor type. Character predictors are
+  # auto-converted to factors by lm/glm (and recorded in xlevels), so they
+  # group and get level rows just like an explicit factor.
   is_factor_term <- function(term_nm) {
     if (length(data_classes) == 0) return(FALSE)
     dc <- data_classes[term_nm]
     if (is.na(dc)) return(FALSE)
-    dc %in% c("factor", "ordered")
+    dc %in% c("factor", "ordered", "character")
   }
 
   # Determine whether a term is a bare logical (TRUE/FALSE) variable.

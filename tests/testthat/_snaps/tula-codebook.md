@@ -52,19 +52,6 @@
       tula(factor(mtcars$cyl), codebook = TRUE)
     Output
       ────────────────────────────────────────────────────────────────────────────────
-      factor.mtcars.cyl.
-      ────────────────────────────────────────────────────────────────────────────────
-      
-                   Type: Factor
-      
-          Unique values: 3                                             Missing .: 0/32
-      
-             Tabulation: Freq.  Level
-                            11  4
-                             7  6
-                            14  8
-      
-      ────────────────────────────────────────────────────────────────────────────────
       factor(mtcars$cyl)
       ────────────────────────────────────────────────────────────────────────────────
       
@@ -131,8 +118,8 @@
           Unique values: 2                                              Missing .: 0/5
       
              Tabulation: Freq.  Numeric  Label
-                             2           Female
-                             3           Male
+                             2        F  Female
+                             3        M  Male
       
 
 # haven codebook keeps numeric (not lexical) code ordering

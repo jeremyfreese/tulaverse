@@ -55,10 +55,14 @@ tula.multinom <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # Header metrics (same structure as glm)
   ll <- as.numeric(stats::logLik(model))
 
-  # McFadden R² = 1 - LL_fitted / LL_null.
-  # LL_null for a K-category outcome = N * log(1/K) (equal-probability baseline)
-  k        <- length(all_lev)
-  ll_null  <- n * log(1 / k)
+  # McFadden R² = 1 - LL_fitted / LL_null, where LL_null is the intercept-only
+  # model's log-likelihood, computed from the outcome's marginal proportions
+  # (same approach as tula.polr / tula.clm). The equal-probability baseline
+  # n*log(1/K) is NOT the null model and badly inflates R² for unbalanced
+  # outcomes.
+  y_tbl    <- table(mf[[1L]])
+  y_tbl    <- y_tbl[y_tbl > 0L]
+  ll_null  <- sum(y_tbl * log(y_tbl / sum(y_tbl)))
   mcfadden <- 1 - ll / ll_null
 
   header_left <- c(

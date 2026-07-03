@@ -277,9 +277,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
             x_keys         = ct_info_k$x_keys,
             mean_vec       = mean_sub_k,
             row_levels     = ct_info_k$row_levels,
-            col_levels     = ct_info_k$col_levels,
-            sort_row_order = ct_info_k$sort_row_order,
-            sort_col_order = ct_info_k$sort_col_order
+            col_levels     = ct_info_k$col_levels
           )
         }
 
@@ -344,9 +342,7 @@ tulatab <- function(y, x = NULL, data = NULL, missing = FALSE, sort = FALSE,
         x_keys          = ct_info$x_keys,
         mean_vec        = mean_sub,
         row_levels      = ct_info$row_levels,
-        col_levels      = ct_info$col_levels,
-        sort_row_order  = ct_info$sort_row_order,
-        sort_col_order  = ct_info$sort_col_order
+        col_levels      = ct_info$col_levels
       )
     }
 

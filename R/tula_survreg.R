@@ -20,13 +20,17 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     s[["table"]]                 # survival::survreg path
   }
 
-  # Separate predictor rows from Log(scale) row (if present).
-
-  # Exponential distribution has a fixed scale = 1 — no Log(scale) row.
-  n_pred    <- length(stats::coef(model))
-  has_scale <- nrow(ct_full) > n_pred
-  ct        <- ct_full[seq_len(n_pred), , drop = FALSE]
-  log_scale_row <- if (has_scale) ct_full[n_pred + 1L, ] else NULL
+  # Separate predictor rows from the Log(scale) row(s).  A plain model has one
+  # scale; a strata() model has one per stratum, so there can be several rows
+  # after the predictors.  Exponential distribution has a fixed scale = 1 and
+  # no Log(scale) row at all.
+  n_pred     <- length(stats::coef(model))
+  n_scale    <- nrow(ct_full) - n_pred
+  has_scale  <- n_scale > 0L
+  ct         <- ct_full[seq_len(n_pred), , drop = FALSE]
+  scale_rows <- if (has_scale) {
+    ct_full[(n_pred + 1L):nrow(ct_full), , drop = FALSE]
+  } else NULL
 
   # --- stat label ------------------------------------------------------------
   # summary(survreg) reports a normal-based statistic (column "z", p-values
@@ -99,12 +103,16 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   # Exponential distribution has fixed scale = 1 (no estimated Log(scale)),
   # so ancillary_df is NULL in that case.
   if (has_scale) {
-    sigma        <- model$scale
-    se_log_scale <- log_scale_row[2L]
-    log_scale_est <- log_scale_row[1L]
+    # One /sigma row per scale parameter (>1 only for strata() models).
+    sigma_vec     <- as.numeric(model$scale)
+    if (length(sigma_vec) != n_scale) {
+      sigma_vec <- rep(sigma_vec, length.out = n_scale)
+    }
+    log_scale_est <- as.numeric(scale_rows[, 1L])
+    se_log_scale  <- as.numeric(scale_rows[, 2L])
 
     # Delta-method SE for sigma: sigma × SE(log_scale)
-    se_sigma <- sigma * se_log_scale
+    se_sigma <- sigma_vec * se_log_scale
 
     # CI: Wald on log scale, then exponentiate (asymmetric, correct)
     if (wide) {
@@ -112,13 +120,25 @@ tula.survreg <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       ci_sigma_lo <- exp(log_scale_est - z_crit * se_log_scale)
       ci_sigma_hi <- exp(log_scale_est + z_crit * se_log_scale)
     } else {
-      ci_sigma_lo <- NA_real_
-      ci_sigma_hi <- NA_real_
+      ci_sigma_lo <- rep(NA_real_, n_scale)
+      ci_sigma_hi <- rep(NA_real_, n_scale)
+    }
+
+    # Label: "/sigma" for a single scale; per-stratum names when several.
+    labels <- if (n_scale == 1L) {
+      "/sigma"
+    } else {
+      rn <- rownames(scale_rows)
+      if (!is.null(rn) && all(nzchar(rn))) {
+        paste0("/", sub("^[Ll]og\\(scale\\)[, ]*", "", rn))
+      } else {
+        paste0("/sigma", seq_len(n_scale))
+      }
     }
 
     ancillary_df <- data.frame(
-      label    = "/sigma",
-      estimate = sigma,
+      label    = labels,
+      estimate = sigma_vec,
       std_err  = se_sigma,
       ci_lower = ci_sigma_lo,
       ci_upper = ci_sigma_hi,

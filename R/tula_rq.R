@@ -209,13 +209,13 @@ tula.rqs <- function(model, wide = NULL, ref = FALSE, label = TRUE,
       colnames(ct_k) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
     }
 
-    # Apply robust SE per quantile if requested
+    # Apply robust SE per quantile if requested. Do NOT swallow the resolver's
+    # error: sandwich does not support class 'rq', so this raises the same clear
+    # "not available" error that tula.rq() does, rather than silently returning
+    # non-robust results the user believes are robust.
     robust_info_k <- NULL
     if (needs_robust && !is.null(single_rq)) {
-      robust_info_k <- tryCatch(
-        .resolve_robust_vcov(single_rq, robust, vcov, cluster),
-        error = function(e) NULL
-      )
+      robust_info_k <- .resolve_robust_vcov(single_rq, robust, vcov, cluster)
       if (!is.null(robust_info_k)) {
         df_k  <- tryCatch(stats::df.residual(single_rq), error = function(e) Inf)
         ct_k  <- .recompute_ct_robust(ct_k, robust_info_k$vcov_mat, "t", df = df_k)

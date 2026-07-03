@@ -24,9 +24,13 @@ tula.clogit <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   n_obs <- s$n
 
   # --- ct: coefficient matrix (Estimate, SE, z, p) -------------------------
+  # Prefer the "robust se" column when the model was fit robustly, so the SE
+  # matches summary()'s robust z / p (see tula.coxph for the same handling).
   ct_raw <- s$coefficients
-  ct <- ct_raw[, c("coef", "se(coef)", "z", "Pr(>|z|)"), drop = FALSE]
+  se_col <- if ("robust se" %in% colnames(ct_raw)) "robust se" else "se(coef)"
+  ct <- ct_raw[, c("coef", se_col, "z", "Pr(>|z|)"), drop = FALSE]
   colnames(ct) <- c("Estimate", "Std. Error", "z value", "Pr(>|z|)")
+  model_is_robust <- se_col == "robust se"
 
   # Robust / cluster SEs ----------------------------------------------------
   # clogit inherits from coxph, so sandwich::vcovHC / vcovCL will dispatch.
@@ -131,7 +135,8 @@ tula.clogit <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     dep_var      = dep_var,
     exp_label    = if (isTRUE(exp)) "Odds Ratio" else NULL,
     level        = level,
-    se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
+    se_label     = if (!is.null(robust_info)) robust_info$se_label
+                   else if (model_is_robust) "Robust SE" else NULL
   )
   .attach_select(out, ...)
 }

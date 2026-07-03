@@ -43,6 +43,15 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
   lnk <- model$family$link
   family_label <- paste0("Family: ", fam, " / Link: ", lnk)
 
+  # exp = TRUE column header: family/link-appropriate label (matches svyglm /
+  # fixest / negbin / clogit). Logit -> odds ratio; log link -> incidence-rate
+  # ratio; otherwise the generic exp(b).
+  exp_label <- if (isTRUE(exp)) {
+    if (lnk == "logit") "Odds Ratio"
+    else if (lnk == "log") "IRR"
+    else NULL
+  } else NULL
+
   # Coefficient matrix; stat_label determined before robust adjustment
   ct          <- stats::coef(s)
   stat_col_nm <- colnames(ct)[3L]
@@ -94,6 +103,7 @@ tula.glm <- function(model, wide = NULL, ref = FALSE, label = TRUE,
     value_fmts   = c(AIC = "f3", BIC = "f3", "Log likelihood" = "f3"),
     exp          = exp,
     dep_var      = dep_var,
+    exp_label    = exp_label,
     level        = level,
     se_label     = if (!is.null(robust_info)) robust_info$se_label else NULL
   )

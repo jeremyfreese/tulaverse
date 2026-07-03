@@ -58,7 +58,7 @@
 # -----------------------------------------------------------------------
 .crosstab_display_levels <- function(vec, var_type, show_value, show_label,
                                      missing) {
-  if (var_type == "haven_labelled") {
+  res <- if (var_type == "haven_labelled") {
     .ct_levels_haven(vec, show_value, show_label, missing)
   } else if (var_type %in% c("factor", "ordered")) {
     .ct_levels_factor(vec, missing)
@@ -68,6 +68,19 @@
     # numeric
     .ct_levels_numeric(vec, missing)
   }
+
+  # Collapse duplicate display strings so factor(levels=) downstream doesn't
+  # error on duplicated levels. This happens when a category's display form
+  # coincides with another's — e.g. a factor with a literal "." level plus the
+  # missing marker, or distinct numerics whose formatted form is identical.
+  # key_vec already maps each observation to its display string, so keeping the
+  # first occurrence merges the colliding categories into one row/column.
+  dup <- duplicated(res$display_order)
+  if (any(dup)) {
+    res$display_order <- res$display_order[!dup]
+    res$is_missing    <- res$is_missing[!dup]
+  }
+  res
 }
 
 
@@ -117,7 +130,7 @@
 
   # Display: integer-looking values without decimal
   display <- vapply(uvals, function(v) {
-    if (v == as.integer(v)) as.character(as.integer(v)) else as.character(v)
+    .fmt_code_str(v)
   }, character(1))
 
   key_vec <- character(length(vec))
@@ -168,7 +181,7 @@
 
   # Build code strings and display strings for non-missing
   code_strs <- vapply(uvals, function(v) {
-    if (v == as.integer(v)) as.character(as.integer(v)) else as.character(v)
+    .fmt_code_str(v)
   }, character(1))
 
   # Right-align codes (will finalize after including tagged NAs)
@@ -396,16 +409,17 @@
 #
 # y_keys, x_keys: character vectors (already filtered for missing if needed)
 # mean_vec:       numeric vector (same length as y_keys / x_keys)
-# row_levels, col_levels: display-order level strings (from ct_matrix)
-# sort_row_order, sort_col_order: integer reordering vectors or NULL
+# row_levels, col_levels: display-order level strings (from ct_matrix).
+#   These come from the FINAL (post-sort) ct_matrix, so building the factors
+#   on them already puts tapply output in display order — no further
+#   reordering is needed (re-applying the sort permutation here scrambled
+#   cells against their row/column labels).
 #
 # Returns list(mean_mat, n_mat, mean_row_marginals, n_row_marginals,
 #              mean_col_marginals, n_col_marginals, mean_grand, n_grand)
 # -----------------------------------------------------------------------
 .build_mean_crosstab <- function(y_keys, x_keys, mean_vec,
-                                  row_levels, col_levels,
-                                  sort_row_order = NULL,
-                                  sort_col_order = NULL) {
+                                  row_levels, col_levels) {
 
   y_fac <- factor(y_keys, levels = row_levels)
   x_fac <- factor(x_keys, levels = col_levels)
@@ -422,18 +436,7 @@
   # Empty cells should show N=0, not NA
   n_mat[is.na(n_mat)] <- 0L
 
-  # Apply sort order if requested (must match ct_matrix sort)
-  if (!is.null(sort_row_order)) {
-    mean_mat <- mean_mat[sort_row_order, , drop = FALSE]
-    n_mat    <- n_mat[sort_row_order, , drop = FALSE]
-  }
-  if (!is.null(sort_col_order)) {
-    mean_mat <- mean_mat[, sort_col_order, drop = FALSE]
-    n_mat    <- n_mat[, sort_col_order, drop = FALSE]
-  }
-
   # Marginal means (observation-weighted, NOT averages of cell means)
-  # After sort, row/col levels of mean_mat match the sorted ct_matrix
   sorted_row_levels <- rownames(mean_mat)
   sorted_col_levels <- colnames(mean_mat)
 
@@ -950,7 +953,7 @@
   uvals <- sort(unique(by_vec[!is_na]))
 
   code_strs <- vapply(uvals, function(v) {
-    if (v == as.integer(v)) as.character(as.integer(v)) else as.character(v)
+    .fmt_code_str(v)
   }, character(1))
 
   key_vec <- rep(NA_character_, length(by_vec))
@@ -1003,11 +1006,7 @@
   key_vec       <- rep(NA_character_, length(by_vec))
 
   for (v in uvals) {
-    code_str <- if (v == as.integer(v)) {
-      as.character(as.integer(v))
-    } else {
-      as.character(v)
-    }
+    code_str <- .fmt_code_str(v)
 
     lbl <- code_to_label[code_str]
     if (is.na(lbl)) lbl <- NULL

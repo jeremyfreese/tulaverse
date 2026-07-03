@@ -146,6 +146,11 @@ print.tula_codebook <- function(x, ...) {
     display_mode <- "tabulation"
   } else if (is_haven && has_val_labels) {
     display_mode <- "tabulation"
+  } else if (haven_char) {
+    # Character-backed labelled vector without value labels: it has string
+    # codes, so tabulate a small set and otherwise show string examples —
+    # never "continuous" (there are no numeric statistics to report).
+    display_mode <- if (n_unique <= 9L) "tabulation" else "string"
   } else if (base_type %in% c("numeric", "integer", "logical", "other") &&
              n_unique <= 9L) {
     display_mode <- "tabulation"
@@ -550,6 +555,10 @@ print.tula_codebook <- function(x, ...) {
   freq_w    <- max(nchar(freq_strs), nchar("Freq."))
 
   num_strs  <- .cb_fmt_num_vec(tab_df$num_value)
+  # Character-backed labelled codes have no numeric value; show the underlying
+  # string code instead of a blank cell.
+  na_code <- is.na(tab_df$num_value)
+  if (any(na_code)) num_strs[na_code] <- as.character(tab_df$value[na_code])
   num_w     <- max(nchar(num_strs), nchar("Numeric"))
 
   # Header
@@ -579,6 +588,10 @@ print.tula_codebook <- function(x, ...) {
   freq_w    <- max(nchar(freq_strs), nchar("Freq."))
 
   val_strs  <- .cb_fmt_num_vec(tab_df$num_value)
+  # Fall back to the raw value string for non-numeric codes (character-backed
+  # haven, Date, etc.) so the Value column is never blank.
+  na_code <- is.na(tab_df$num_value)
+  if (any(na_code)) val_strs[na_code] <- as.character(tab_df$value[na_code])
   val_w     <- max(nchar(val_strs), nchar("Value"))
 
   # Header

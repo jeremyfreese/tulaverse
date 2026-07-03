@@ -15,6 +15,11 @@
                              median = FALSE, digits = 7L) {
   stopifnot(is.data.frame(df))
 
+  if (ncol(df) == 0L) {
+    stop("tula() has nothing to summarize: the data has no columns.",
+         call. = FALSE)
+  }
+
   rows_list <- vector("list", ncol(df))
   for (j in seq_along(df)) {
     rows_list[[j]] <- .build_summary_rows(
@@ -163,8 +168,10 @@ print.tula_summary <- function(x, ...) {
   num_cols_w <- 2L + cw_obs + 1L + cw_mean + 1L + cw_sd + 1L + cw_min + 1L + cw_max
   # = 58
 
-  # Resolve width at print time
-  max_w <- if (is.null(x$width)) getOption("width") else x$width
+  # Resolve width at print time, clamping sub-60 widths (matches the codebook
+  # and regression paths via .resolve_width) so a narrow terminal doesn't
+  # collapse the label column and misalign the separators.
+  max_w <- .resolve_width(x$width)
 
   # Natural width = widest label + numeric columns.
   # Label column must be at least as wide as the column header word "Variable"
