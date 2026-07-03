@@ -115,6 +115,22 @@ test_that("tulatab() does not crash on colliding display levels", {
   )))
 })
 
+test_that("survreg with strata() gets one /sigma row per stratum, each with its own CI", {
+  skip_if_not_installed("survival")
+  m <- survival::survreg(
+    survival::Surv(futime, fustat) ~ ecog.ps + survival::strata(rx),
+    data = survival::ovarian, dist = "weibull"
+  )
+  expect_equal(length(m$scale), 2L)          # two strata -> two scales
+  anc <- tula(m, wide = TRUE)$ancillary_df
+  expect_equal(nrow(anc), 2L)                # one row per stratum (was 1, recycled)
+  expect_equal(anc$estimate, unname(as.numeric(m$scale)), tolerance = 1e-8)
+  # each CI must contain its own estimate (the recycling bug violated this)
+  expect_true(all(anc$ci_lower < anc$estimate & anc$estimate < anc$ci_upper))
+  # and the two rows must differ (not one stratum's values recycled)
+  expect_false(isTRUE(all.equal(anc$std_err[1], anc$std_err[2])))
+})
+
 test_that("character-backed haven codebook shows codes, not blank cells", {
   skip_if_not_installed("haven")
   v <- haven::labelled(c("a", "b", "zz", "a"),
